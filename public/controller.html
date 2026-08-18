@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<title>કંટ્રોલર</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; }
+  body { font-family: system-ui, Roboto, sans-serif; min-height:100vh;
+    background: linear-gradient(170deg, #0f2027, #203a43, #2c5364); color:#fff; padding:16px 16px 40px; }
+  header { text-align:center; margin-bottom:6px; }
+  header h1 { font-size:18px; }
+  header .room { font-size:13px; opacity:.7; }
+  #pill { display:inline-block; margin-top:8px; background:rgba(0,0,0,.4); padding:5px 14px; border-radius:999px; font-size:12px; color:#9fffd9; }
+
+  /* now playing card (INFO ONLY — video NOT shown here) */
+  .np { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:16px; margin:14px 0; }
+  .np .lbl { font-size:11px; opacity:.6; letter-spacing:1px; text-transform:uppercase; }
+  .np .title { font-size:16px; font-weight:700; margin:4px 0 10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .times { display:flex; justify-content:space-between; font-size:12px; opacity:.8; margin-top:6px; }
+  input[type=range] { width:100%; accent-color:#22d3a0; }
+
+  /* transport buttons */
+  .trans { display:flex; align-items:center; justify-content:center; gap:14px; margin:16px 0; }
+  .cbtn { border:none; border-radius:16px; color:#0b1a20; font-weight:700; cursor:pointer; }
+  .cbtn.med { width:64px; height:64px; font-size:26px; background:rgba(255,255,255,.9); }
+  .cbtn.big { width:92px; height:92px; font-size:38px; border-radius:50%; background:#22d3a0; box-shadow:0 8px 24px rgba(34,211,160,.35); }
+  .cbtn:active { transform:scale(.93); }
+
+  /* volume */
+  .vol { background:rgba(255,255,255,.07); border-radius:14px; padding:12px 14px; }
+  .vol .row2 { display:flex; align-items:center; gap:10px; }
+  .vol .row2 span { font-size:18px; width:22px; text-align:center; }
+
+  /* custom url */
+  .custom { margin-top:16px; background:rgba(255,255,255,.07); border-radius:14px; padding:12px; }
+  .custom input { width:100%; padding:11px; border-radius:10px; border:1px solid rgba(255,255,255,.25); background:rgba(0,0,0,.25); color:#fff; font-size:13px; outline:none; }
+  .custom button { margin-top:8px; width:100%; padding:12px; border:none; border-radius:10px; background:#f59e0b; color:#231500; font-weight:700; cursor:pointer; font-size:14px; }
+
+  /* playlist */
+  .list { margin-top:18px; }
+  .list h3 { font-size:13px; opacity:.7; margin-bottom:8px; }
+  .listItem { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:12px; padding:12px; margin-bottom:8px; cursor:pointer; }
+  .listItem.active { border-color:#22d3a0; background:rgba(34,211,160,.12); }
+  .listItem .num { font-size:12px; opacity:.5; width:20px; }
+  .listItem .t { font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .listItem .play { margin-left:auto; }
+  .empty { text-align:center; opacity:.5; font-size:13px; padding:20px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>🎮 કંટ્રોલર</h1>
+    <div class="room" id="roomTag">—</div>
+    <div id="pill">કનેક્ટ થઈ રહ્યું છે…</div>
+  </header>
+
+  <!-- Now playing info (NO VIDEO PLAYED HERE) -->
+  <div class="np">
+    <div class="lbl">હવે વાગી રહ્યું છે</div>
+    <div class="title" id="npTitle">—</div>
+    <input id="seek" type="range" min="0" max="1000" value="0">
+    <div class="times"><span id="curT">0:00</span><span id="durT">0:00</span></div>
+  </div>
+
+  <!-- Transport -->
+  <div class="trans">
+    <button class="cbtn med" id="prevBtn">⏮</button>
+    <button class="cbtn big" id="playBtn">▶</button>
+    <button class="cbtn med" id="nextBtn">⏭</button>
+  </div>
+
+  <!-- Volume -->
+  <div class="vol">
+    <div class="row2"><span>🔊</span><input id="vol" type="range" min="0" max="100" value="100"><button id="muteBtn" class="cbtn med" style="width:52px;height:44px;font-size:18px;background:rgba(255,255,255,.85)">🔇</button></div>
+  </div>
+
+  <!-- Custom URL -->
+  <div class="custom">
+    <input id="url" type="text" placeholder="તમારી વિડિયો લિંક (MP4) પેસ્ટ કરો…">
+    <button id="loadBtn">➕ આ વિડિયો ચલાવો (Play Link)</button>
+  </div>
+
+  <!-- Playlist -->
+  <div class="list">
+    <h3>પ્લેલિસ્ટ (વિડિયો પસંદ કરો)</h3>
+    <div id="listBox"><div class="empty">પ્લેલિસ્ટ લોડ થઈ રહી છે…</div></div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+  var params = new URLSearchParams(window.location.search);
+  var room = (params.get('room') || '').trim();
+  document.getElementById('roomTag').textContent = 'રૂમ: ' + room;
+
+  var ws = null;
+  var state = null;
+  var seeking = false;
+
+  var pill = document.getElementById('pill');
+  var npTitle = document.getElementById('npTitle');
+  var seekEl = document.getElementById('seek');
+  var curT = document.getElementById('curT');
+  var durT = document.getElementById('durT');
+  var playBtn = document.getElementById('playBtn');
+  var volEl = document.getElementById('vol');
+
+  function setPill(t, ok){ pill.textContent = t; pill.style.color = ok === false ? '#ff8a8a' : (ok ? '#9fffd9' : '#ffd88a'); }
+  function fmt(s){ s = Math.max(0, Math.floor(s||0)); var m = Math.floor(s/60), sec = s%60; return m + ':' + (sec<10?'0':'') + sec; }
+
+  function send(obj){ if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+
+  function renderState(st){
+    if (!st) return;
+    npTitle.textContent = st.title || '—';
+    seekEl.max = 1000;
+    if (!seeking) {
+      if (st.duration > 0) seekEl.value = Math.round((st.time / st.duration) * 1000);
+      curT.textContent = fmt(st.time);
+      durT.textContent = fmt(st.duration);
+    }
+    playBtn.textContent = st.playing ? '⏸' : '▶';
+    renderList(st);
+  }
+
+  function renderList(st){
+    var box = document.getElementById('listBox');
+    if (!st || !st.playlist || !st.playlist.length) { box.innerHTML = '<div class="empty">પ્લેલિસ્ટ ખાલી છે</div>'; return; }
+    var html = '';
+    for (var i = 0; i < st.playlist.length; i++) {
+      var it = st.playlist[i];
+      var active = (i === st.index) ? ' active' : '';
+      var num = String(i + 1);
+      html += '<div class="listItem' + active + '" data-i="' + i + '">' +
+        '<span class="num">' + num + '</span>' +
+        '<span class="t">' + (it.title || 'વિડિયો') + '</span>' +
+        '<span class="play">▶</span></div>';
+    }
+    box.innerHTML = html;
+  }
+
+  // ---- buttons ----
+  document.getElementById('playBtn').addEventListener('click', function(){ send({type:'cmd', cmd:'toggle'}); });
+  document.getElementById('nextBtn').addEventListener('click', function(){ send({type:'cmd', cmd:'next'}); });
+  document.getElementById('prevBtn').addEventListener('click', function(){ send({type:'cmd', cmd:'prev'}); });
+
+  seekEl.addEventListener('input', function(){ seeking = true; if (state) curT.textContent = fmt((seekEl.value/1000) * state.duration); });
+  seekEl.addEventListener('change', function(){
+    seeking = false;
+    if (state && state.duration > 0) {
+      send({type:'cmd', cmd:'seek', value: (seekEl.value/1000) * state.duration});
+    }
+  });
+
+  volEl.addEventListener('change', function(){
+    var val = Number(volEl.value) / 100;
+    send({type:'cmd', cmd:'volume', value: val});
+  });
+  document.getElementById('muteBtn').addEventListener('click', function(){
+    send({type:'cmd', cmd:'mute'});
+  });
+
+  document.getElementById('loadBtn').addEventListener('click', function(){
+    var u = document.getElementById('url').value.trim();
+    if (!u) { alert('લિંક ભરો'); return; }
+    send({type:'load', url: u, title: ''});
+  });
+
+  // playlist delegation
+  document.getElementById('listBox').addEventListener('click', function(e){
+    var item = e.target.closest ? e.target.closest('.listItem') : null;
+    if (!item) return;
+    var i = item.getAttribute('data-i');
+    if (i != null) send({type:'cmd', cmd:'playindex', value: Number(i)});
+  });
+
+  // ---- ws ----
+  function connect(){
+    var proto = (location.protocol === 'https:') ? 'wss://' : 'ws://';
+    ws = new WebSocket(proto + location.host);
+    ws.onopen = function(){ setPill('કનેક્ટ થયું ✓'); send({type:'join', role:'controller', room: room}); };
+    ws.onclose = function(){ setPill('કનેક્શન બંધ — ફરી પ્રયત્ન…', false); setTimeout(connect, 2000); };
+    ws.onerror = function(){ setPill('કનેક્શન ભૂલ', false); };
+    ws.onmessage = function(ev){
+      var m; try { m = JSON.parse(ev.data); } catch(e){ return; }
+      if (m.type === 'hello' || m.type === 'state' || m.type === 'status') {
+        if (m.state) { state = m.state; renderState(m.state); }
+        if (m.type === 'hello') renderState(m.state);
+      } else if (m.type === 'peers') {
+        setPill(m.peers.player ? 'પ્લેયર જોડાયેલ છે ✓' : 'પ્લેયર નથી જોડાયેલ — જૂના ફોનમાં Player ખોલો', m.peers.player);
+      } else if (m.type === 'error') { setPill(m.message, false); }
+    };
+  }
+
+  if (!room) { setPill('રૂમ કોડ ખૂટે છે', false); }
+  else connect();
+})();
+</script>
+</body>
+</html>

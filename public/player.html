@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>વિડિયો પ્લેયર</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; }
+  html, body { width:100%; height:100%; background:#000; color:#fff; font-family: system-ui, Roboto, sans-serif; overflow:hidden; }
+  #stage { width:100%; height:100%; background:#000; display:flex; align-items:center; justify-content:center; }
+  video { width:100%; height:100%; background:#000; object-fit: contain; display:block; }
+  #startOverlay { position:fixed; inset:0; background:#000; z-index:50; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; padding:30px; }
+  #startOverlay .big { font-size:52px; margin-bottom:16px; }
+  #startOverlay h2 { font-size:20px; margin-bottom:10px; }
+  #startOverlay p { font-size:14px; opacity:.75; line-height:1.6; margin-bottom:24px; }
+  #startOverlay .codeTag { background:#1a2733; border:1px solid #3a4a5a; padding:10px 20px; border-radius:12px; font-size:26px; letter-spacing:4px; margin-bottom:24px; }
+  #startBtn { background:#22d3a0; color:#06251c; border:none; font-size:18px; font-weight:700; padding:16px 40px; border-radius:999px; cursor:pointer; }
+  #statusPill { position:fixed; top:12px; left:0; right:0; text-align:center; z-index:20; pointer-events:none; }
+  #statusPill span { background:rgba(0,0,0,.55); padding:6px 14px; border-radius:999px; font-size:12px; color:#9fffd9; display:inline-block; }
+  #titleBar { position:fixed; bottom:0; left:0; right:0; z-index:15; text-align:center; padding:18px; background:linear-gradient(transparent, rgba(0,0,0,.85)); }
+  #titleBar span { font-size:14px; opacity:.9; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <video id="v" playsinline webkit-playsinline preload="auto"></video>
+  </div>
+
+  <div id="titleBar"><span id="titleTxt">—</span></div>
+  <div id="statusPill"><span id="pill">કનેક્ટ થઈ રહ્યું છે…</span></div>
+
+  <div id="startOverlay">
+    <div class="big">📺</div>
+    <h2>વિડિયો પ્લેયર શરૂ કરો</h2>
+    <p>આ જૂનો ફોન છે. અહીં વિડિયો મોટી સ્ક્રીનમાં ચાલશે.<br>નીચેનો બટન દબાવો જેથી ફુલસ્ક્રીન શરૂ થાય.</p>
+    <div class="codeTag" id="codeTag">—</div>
+    <button id="startBtn">▶ શરૂ કરો</button>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  var params = new URLSearchParams(window.location.search);
+  var room = (params.get('room') || '').trim();
+  var v = document.getElementById('v');
+  var startOverlay = document.getElementById('startOverlay');
+  var startBtn = document.getElementById('startBtn');
+  var pill = document.getElementById('pill');
+  var titleTxt = document.getElementById('titleTxt');
+  var codeTag = document.getElementById('codeTag');
+
+  var ws = null;
+  var started = false;      // user tapped start (user gesture given)
+  var fullscreenOn = false;
+  var lastReport = 0;
+  var currentUrl = '';
+
+  codeTag.textContent = 'રૂમ: ' + (room || '—');
+
+  function setPill(t, ok){
+    pill.textContent = t;
+    pill.style.color = ok === false ? '#ff8a8a' : (ok ? '#9fffd9' : '#ffd88a');
+  }
+
+  function goFullscreen(){
+    var el = v;
+    var req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitEnterFullscreen;
+    try {
+      if (req) req.call(el);
+      fullscreenOn = true;
+    } catch(e) {}
+  }
+
+  function report(type, extra){
+    if (!ws || ws.readyState !== 1) return;
+    var obj = { type: type, time: v.currentTime || 0, duration: v.duration || 0, playing: !v.paused };
+    if (extra) { for (var k in extra) obj[k] = extra[k]; }
+    ws.send(JSON.stringify(obj));
+  }
+
+  function loadVideo(url, title, playIt){
+    currentUrl = url;
+    titleTxt.textContent = title || '';
+    v.src = url;
+    v.load();
+    if (playIt) {
+      var p = v.play();
+      if (p && p.catch) p.catch(function(){ /* muted autoplay not allowed */ });
+    }
+  }
+
+  function applyCmd(cmd, value){
+    if (cmd === 'toggle') {
+      if (v.paused) v.play(); else v.pause();
+    } else if (cmd === 'play') {
+      v.play();
+    } else if (cmd === 'pause') {
+      v.pause();
+    } else if (cmd === 'seek') {
+      if (typeof value === 'number') { try { v.currentTime = value; } catch(e){} }
+    }
+    // next/prev handled by full reload via state from server
+  }
+
+  // ---- connection ----
+  function connect(){
+    var proto = (location.protocol === 'https:') ? 'wss://' : 'ws://';
+    ws = new WebSocket(proto + location.host);
+
+    ws.onopen = function(){
+      setPill('કનેક્ટ થયું ✓');
+      ws.send(JSON.stringify({ type:'join', role:'player', room: room }));
+    };
+    ws.onclose = function(){
+      setPill('કનેક્શન બંધ થયું — ફરી પ્રયત્ન કરું છું…', false);
+      setTimeout(connect, 2000);
+    };
+    ws.onerror = function(){ setPill('કનેક્શન ભૂલ', false); };
+    ws.onmessage = function(ev){
+      var m;
+      try { m = JSON.parse(ev.data); } catch(e){ return; }
+
+      if (m.type === 'hello') {
+        var st = m.state;
+        if (st && st.url) loadVideo(st.url, st.title, st.playing === true);
+      } else if (m.type === 'state') {
+        var st2 = m.state;
+        if (st2 && st2.url && st2.url !== currentUrl) {
+          loadVideo(st2.url, st2.title, st2.playing === true);
+        }
+      } else if (m.type === 'cmd') {
+        if (m.cmd === 'next' || m.cmd === 'prev') {
+          // server sent new state; load it
+        } else {
+          applyCmd(m.cmd, m.value);
+        }
+      } else if (m.type === 'load') {
+        loadVideo(m.url, m.title, m.playing === true);
+      } else if (m.type === 'peers') {
+        setPill(m.peers.controller ? 'કંટ્રોલર જોડાયેલ છે ✓' : 'કંટ્રોલર નથી જોડાયેલ — બીજા ફોનમાં Controller ખોલો', m.peers.controller);
+      } else if (m.type === 'error') {
+        setPill(m.message, false);
+      }
+    };
+  }
+
+  startBtn.addEventListener('click', function(){
+    started = true;
+    startOverlay.style.display = 'none';
+    goFullscreen();
+    if (v.src) { v.play().catch ? v.play().catch(function(){}) : v.play(); }
+    // give the browser a user gesture so remote play works
+  });
+
+  v.addEventListener('play', function(){ report('status'); });
+  v.addEventListener('pause', function(){ report('status'); });
+  v.addEventListener('loadedmetadata', function(){ report('status'); });
+  v.addEventListener('ended', function(){
+    // finished current video -> tell controller, it will send next
+    report('ended');
+  });
+  v.addEventListener('timeupdate', function(){
+    var now = Date.now();
+    if (now - lastReport > 1000) {
+      lastReport = now;
+      report('status');
+    }
+  });
+
+  // tap on video toggles title bar visibility
+  v.addEventListener('click', function(){
+    var tb = document.getElementById('titleBar');
+    tb.style.display = (tb.style.display === 'none') ? '' : 'none';
+  });
+
+  if (!room) { setPill('રૂમ કોડ ખૂટે છે', false); }
+  else { connect(); }
+})();
+</script>
+</body>
+</html>
