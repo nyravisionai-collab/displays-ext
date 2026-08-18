@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>રિમોટ વિડિયો કંટ્રોલ</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; min-height: 100vh; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(160deg, #0f2027, #203a43, #2c5364);
+    color: #fff; display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .card { width: 100%; max-width: 420px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 20px; padding: 28px 24px; box-shadow: 0 20px 50px rgba(0,0,0,.4); text-align: center; }
+  h1 { margin: 0 0 6px; font-size: 22px; }
+  .sub { opacity: .75; margin: 0 0 22px; font-size: 14px; line-height: 1.5; }
+  .brand { font-size: 40px; margin-bottom: 8px; }
+  input[type=text], input[type=number] {
+    width: 100%; padding: 14px; font-size: 20px; letter-spacing: 4px; text-align: center;
+    border: 2px solid rgba(255,255,255,.25); border-radius: 12px; background: rgba(0,0,0,.25); color: #fff; outline: none; }
+  input:focus { border-color: #4cd3ff; }
+  .row { margin: 14px 0; }
+  label { display: block; text-align: left; font-size: 13px; opacity: .8; margin-bottom: 6px; }
+  .btn { display: block; width: 100%; padding: 16px; margin-top: 10px; border: none; border-radius: 14px;
+    font-size: 16px; font-weight: 700; cursor: pointer; color: #0b1a20; }
+  .btn.green { background: #22d3a0; }
+  .btn.blue { background: #38bdf8; }
+  .btn.outline { background: rgba(255,255,255,.1); color: #fff; border: 1px dashed rgba(255,255,255,.35); font-weight: 600; }
+  .divider { display: flex; align-items: center; margin: 18px 0; color: rgba(255,255,255,.5); font-size: 13px; }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: rgba(255,255,255,.15); }
+  .divider span { padding: 0 10px; }
+  .note { font-size: 12px; opacity: .6; margin-top: 16px; line-height: 1.6; }
+  .role-note { font-size: 13px; background: rgba(0,0,0,.25); border-radius: 10px; padding: 10px; margin-top: 8px; line-height: 1.5; opacity: .9;}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">📺🎮</div>
+    <h1>રિમોટ વિડિયો કંટ્રોલ</h1>
+    <p class="sub">એક ફોનથી બીજા ફોનમાં વિડિયો ચલાવો અને કંટ્રોલ કરો.</p>
+
+    <div class="row">
+      <label>રૂમ કોડ (4 આંકડા)</label>
+      <input id="code" type="number" inputmode="numeric" placeholder="••••" maxlength="4">
+    </div>
+    <button class="btn outline" onclick="newRoom()">🎲 નવો રૂમ કોડ બનાવો</button>
+
+    <div class="divider"><span>કયા ફોનથી શું?</span></div>
+
+    <button class="btn green" onclick="go('player')">🎬 હું જૂનો ફોન છું<br><span style="font-weight:400;font-size:12px;">(આ ફોનમાં વિડિયો ચાલશે)</span></button>
+    <div class="role-note">👉 આ ફોનની સ્ક્રીન પર મોટી સ્ક્રીનમાં વિડિયો ચાલશે.</div>
+
+    <button class="btn blue" onclick="go('controller')" style="margin-top:16px">🎮 હું નવો ફોન છું<br><span style="font-weight:400;font-size:12px;">(આ ફોનમાં ફક્ત બટન – વિડિયો નહીં ચાલે)</span></button>
+    <div class="role-note">👉 આ ફોનમાં ફક્ત Play / Pause / Next / Seek ના બટન હશે. વિડિયો અહીં નહીં ચાલે.</div>
+
+    <p class="note">
+      📌 બન્ને ફોન <b>સમાન Wi-Fi / નેટવર્ક</b> પર હોય તો શ્રેષ્ઠ.<br>
+      📌 પહેલા <b>જૂના ફોન</b>માં Player ખોલો, પછી નવા ફોનમાં Controller ખોલો —<br>
+      બન્નેમાં એક જ કોડ ભરો. (જૂના ફોનમાં <b>Chrome</b> browser વાપરો.)
+    </p>
+  </div>
+
+<script>
+  function newRoom(){ document.getElementById('code').value = String(Math.floor(1000 + Math.random()*9000)); }
+  function go(role){
+    var code = document.getElementById('code').value.trim();
+    if(code.length < 4){ alert('પહેલા રૂમ કોડ ભરો અથવા "નવો રૂમ કોડ બનાવો" દબાવો.'); return; }
+    window.location.href = role + '.html?room=' + encodeURIComponent(code);
+  }
+</script>
+</body>
+</html>

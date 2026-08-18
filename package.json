@@ -1,0 +1,8 @@
+{
+  "name": "remote-video-control",
+  "version": "1.0.0",
+  "description": "Remote Video Control — one phone controls a video playing on another phone. No server needed (PeerJS/WebRTC).",
+  "scripts": {
+    "start": "python3 -m http.server 8080"
+  }
+}

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<title>કંટ્રોલર</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; }
+  body { font-family: system-ui, Roboto, sans-serif; min-height:100vh;
+    background: linear-gradient(170deg, #0f2027, #203a43, #2c5364); color:#fff; padding:16px 16px 40px; }
+  header { text-align:center; margin-bottom:6px; }
+  header h1 { font-size:18px; }
+  header .room { font-size:13px; opacity:.7; }
+  #pill { display:inline-block; margin-top:8px; background:rgba(0,0,0,.4); padding:5px 14px; border-radius:999px; font-size:12px; color:#9fffd9; }
+
+  .np { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:16px; margin:14px 0; }
+  .np .lbl { font-size:11px; opacity:.6; letter-spacing:1px; text-transform:uppercase; }
+  .np .title { font-size:16px; font-weight:700; margin:4px 0 10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .times { display:flex; justify-content:space-between; font-size:12px; opacity:.8; margin-top:6px; }
+  input[type=range] { width:100%; accent-color:#22d3a0; }
+
+  .trans { display:flex; align-items:center; justify-content:center; gap:14px; margin:16px 0; }
+  .cbtn { border:none; border-radius:16px; color:#0b1a20; font-weight:700; cursor:pointer; }
+  .cbtn.med { width:64px; height:64px; font-size:26px; background:rgba(255,255,255,.9); }
+  .cbtn.big { width:92px; height:92px; font-size:38px; border-radius:50%; background:#22d3a0; box-shadow:0 8px 24px rgba(34,211,160,.35); }
+  .cbtn:active { transform:scale(.93); }
+
+  .vol { background:rgba(255,255,255,.07); border-radius:14px; padding:12px 14px; }
+  .vol .row2 { display:flex; align-items:center; gap:10px; }
+  .vol .row2 span { font-size:18px; width:22px; text-align:center; }
+
+  .custom { margin-top:16px; background:rgba(255,255,255,.07); border-radius:14px; padding:12px; }
+  .custom input { width:100%; padding:11px; border-radius:10px; border:1px solid rgba(255,255,255,.25); background:rgba(0,0,0,.25); color:#fff; font-size:13px; outline:none; }
+  .custom button { margin-top:8px; width:100%; padding:12px; border:none; border-radius:10px; background:#f59e0b; color:#231500; font-weight:700; cursor:pointer; font-size:14px; }
+
+  .list { margin-top:18px; }
+  .list h3 { font-size:13px; opacity:.7; margin-bottom:8px; }
+  .listItem { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:12px; padding:12px; margin-bottom:8px; cursor:pointer; }
+  .listItem.active { border-color:#22d3a0; background:rgba(34,211,160,.12); }
+  .listItem .num { font-size:12px; opacity:.5; width:20px; }
+  .listItem .t { font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .listItem .play { margin-left:auto; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>🎮 કંટ્રોલર</h1>
+    <div class="room" id="roomTag">—</div>
+    <div id="pill">કનેક્ટ થઈ રહ્યું છે…</div>
+  </header>
+
+  <!-- Now playing info (NO VIDEO PLAYED HERE) -->
+  <div class="np">
+    <div class="lbl">હવે વાગી રહ્યું છે</div>
+    <div class="title" id="npTitle">—</div>
+    <input id="seek" type="range" min="0" max="1000" value="0">
+    <div class="times"><span id="curT">0:00</span><span id="durT">0:00</span></div>
+  </div>
+
+  <!-- Transport -->
+  <div class="trans">
+    <button class="cbtn med" id="prevBtn">⏮</button>
+    <button class="cbtn big" id="playBtn">▶</button>
+    <button class="cbtn med" id="nextBtn">⏭</button>
+  </div>
+
+  <!-- Volume -->
+  <div class="vol">
+    <div class="row2"><span>🔊</span><input id="vol" type="range" min="0" max="100" value="100"><button id="muteBtn" class="cbtn med" style="width:52px;height:44px;font-size:18px;background:rgba(255,255,255,.85)">🔇</button></div>
+  </div>
+
+  <!-- Custom URL -->
+  <div class="custom">
+    <input id="url" type="text" placeholder="તમારી વિડિયો લિંક (MP4) પેસ્ટ કરો…">
+    <button id="loadBtn">➕ આ વિડિયો ચલાવો</button>
+  </div>
+
+  <!-- Playlist -->
+  <div class="list">
+    <h3>પ્લેલિસ્ટ (વિડિયો પસંદ કરો)</h3>
+    <div id="listBox"></div>
+  </div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var params = new URLSearchParams(window.location.search);
+  var room = (params.get('room') || '').trim();
+  var PEER_PREFIX = 'rvideo-';
+  document.getElementById('roomTag').textContent = 'રૂમ: ' + room;
+
+  // Sample playlist (works on any browser)
+  var SAMPLES = [
+    { title: 'Big Buck Bunny',     url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4' },
+    { title: 'Elephants Dream',    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4' },
+    { title: 'Sintel',             url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4' },
+    { title: 'Tears of Steel',     url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4' },
+    { title: 'For Bigger Blazes',  url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4' }
+  ];
+
+  var playlist = SAMPLES.slice();
+  var index = 0;
+  var playing = false;
+
+  var peer = null, conn = null, connected = false;
+  var seeking = false;
+
+  var pill = document.getElementById('pill');
+  var npTitle = document.getElementById('npTitle');
+  var seekEl = document.getElementById('seek');
+  var curT = document.getElementById('curT');
+  var durT = document.getElementById('durT');
+  var playBtn = document.getElementById('playBtn');
+  var volEl = document.getElementById('vol');
+
+  function setPill(t, ok){ pill.textContent = t; pill.style.color = ok === false ? '#ff8a8a' : (ok ? '#9fffd9' : '#ffd88a'); }
+  function fmt(s){ s = Math.max(0, Math.floor(s||0)); var m = Math.floor(s/60), sec = s%60; return m + ':' + (sec<10?'0':'') + sec; }
+
+  function current(){ return playlist[index] || { title: '', url: '' }; }
+
+  function send(obj){
+    if (!conn || conn.open !== true) return;
+    try { conn.send(obj); } catch(e) {}
+  }
+
+  function sendHello(){
+    var c = current();
+    send({ type:'hello', playlist: playlist, index: index, url: c.url, title: c.title, playing: playing, time: 0 });
+  }
+
+  function pushState(){
+    var c = current();
+    send({ type:'hello', playlist: playlist, index: index, url: c.url, title: c.title, playing: playing, time: 0 });
+  }
+
+  function render(){
+    var c = current();
+    npTitle.textContent = c.title || '—';
+    if (!seeking) { curT.textContent = fmt(0); durT.textContent = fmt(0); }
+    playBtn.textContent = playing ? '⏸' : '▶';
+    renderList();
+  }
+
+  function renderList(){
+    var box = document.getElementById('listBox');
+    var html = '';
+    for (var i = 0; i < playlist.length; i++) {
+      var it = playlist[i];
+      html += '<div class="listItem' + (i===index?' active':'') + '" data-i="' + i + '">' +
+        '<span class="num">' + (i+1) + '</span>' +
+        '<span class="t">' + (it.title || 'વિડિયો') + '</span>' +
+        '<span class="play">▶</span></div>';
+    }
+    box.innerHTML = html;
+  }
+
+  // ---- buttons ----
+  function cmd(name, value){
+    if (!connected) { alert('પ્લેયર હજુ જોડાયેલું નથી'); return; }
+    var c = current();
+    if (name === 'next') { index = (index + 1) % playlist.length; playing = true; pushState(); }
+    else if (name === 'prev') { index = (index - 1 + playlist.length) % playlist.length; playing = true; pushState(); }
+    else if (name === 'playindex') { index = value; playing = true; pushState(); }
+    else if (name === 'toggle') { playing = !playing; send({type:'cmd', cmd:'toggle', title:c.title}); render(); return; }
+    else if (name === 'seek') { send({type:'cmd', cmd:'seek', value:value}); }
+    else if (name === 'volume') { send({type:'cmd', cmd:'volume', value:value}); }
+    else if (name === 'mute') { send({type:'cmd', cmd:'mute'}); }
+    render();
+  }
+
+  document.getElementById('playBtn').addEventListener('click', function(){ cmd('toggle'); });
+  document.getElementById('nextBtn').addEventListener('click', function(){ cmd('next'); });
+  document.getElementById('prevBtn').addEventListener('click', function(){ cmd('prev'); });
+
+  seekEl.addEventListener('input', function(){
+    seeking = true;
+    if (durT._dur) curT.textContent = fmt((seekEl.value/1000) * durT._dur);
+  });
+  seekEl.addEventListener('change', function(){
+    seeking = false;
+    var d = durT._dur || 0;
+    if (d > 0) cmd('seek', (seekEl.value/1000) * d);
+  });
+
+  volEl.addEventListener('change', function(){ cmd('volume', Number(volEl.value)/100); });
+  document.getElementById('muteBtn').addEventListener('click', function(){ cmd('mute'); });
+
+  document.getElementById('loadBtn').addEventListener('click', function(){
+    var u = document.getElementById('url').value.trim();
+    if (!u) { alert('લિંક ભરો'); return; }
+    playlist = [{ title: 'Custom Video', url: u }];
+    index = 0; playing = true;
+    pushState();
+    render();
+  });
+
+  document.getElementById('listBox').addEventListener('click', function(e){
+    var item = e.target.closest ? e.target.closest('.listItem') : null;
+    if (!item) return;
+    cmd('playindex', Number(item.getAttribute('data-i')));
+  });
+
+  // ---- PeerJS (controller connects to player) ----
+  function connect(){
+    if (!window.Peer) { setPill('PeerJS લોડ ન થયું — ઇન્ટરનેટ ચેક કરો', false); return; }
+    peer = new Peer();
+    peer.on('open', function(){
+      setPill('પ્લેયર શોધી રહ્યા છીએ…');
+      conn = peer.connect(PEER_PREFIX + room, { reliable: true });
+      conn.on('open', function(){
+        connected = true;
+        setPill('પ્લેયર જોડાયેલ છે ✓');
+        sendHello();
+      });
+      conn.on('data', handleMsg);
+      conn.on('close', function(){ connected = false; setPill('પ્લેયર છૂટું પડ્યું', false); });
+      conn.on('error', function(){ connected = false; setPill('કનેક્શન ભૂલ', false); });
+    });
+    peer.on('error', function(err){
+      var t = 'કનેક્શન ભૂલ';
+      if (err && err.type === 'peer-unavailable') t = 'પ્લેયર નથી — જૂના ફોનમાં Player ખોલો (એ જ કોડ)';
+      setPill(t, false);
+    });
+    peer.on('disconnected', function(){ if (!peer.destroyed) peer.reconnect(); });
+  }
+
+  function handleMsg(m){
+    if (!m) return;
+    if (m.type === 'status') {
+      if (!seeking) { curT.textContent = fmt(m.time); }
+      if (m.duration) { durT.textContent = fmt(m.duration); durT._dur = m.duration; }
+      playing = m.playing;
+      playBtn.textContent = playing ? '⏸' : '▶';
+    } else if (m.type === 'ended') {
+      // auto-next
+      index = (index + 1) % playlist.length;
+      playing = true;
+      pushState();
+      render();
+    }
+  }
+
+  render();
+  if (!room) { setPill('રૂમ કોડ ખૂટે છે', false); }
+  else connect();
+})();
+</script>
+</body>
+</html>
