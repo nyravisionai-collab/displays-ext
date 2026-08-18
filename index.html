@@ -44,31 +44,28 @@
       <label>રૂમ કોડ (4 આંકડા)</label>
       <input id="code" type="number" inputmode="numeric" placeholder="••••" maxlength="4">
     </div>
-    <button class="btn outline" onclick="newRoom()">🎲 નવો રૂમ બનાવો (કોડ બનાવો)</button>
+    <button class="btn outline" onclick="newRoom()">🎲 નવો રૂમ કોડ બનાવો</button>
 
-    <div class="divider"><span>કયા ફોનથી શું કરવું?</span></div>
+    <div class="divider"><span>કયા ફોનથી શું?</span></div>
 
-    <button class="btn green" onclick="go('player')">🎬 હું જૂનો ફોન છું<br><span style="font-weight:400;font-size:12px;">(Android 6 – આ ફોનમાં વિડિયો ચાલશે)</span></button>
+    <button class="btn green" onclick="go('player')">🎬 હું જૂનો ફોન છું<br><span style="font-weight:400;font-size:12px;">(આ ફોનમાં વિડિયો ચાલશે)</span></button>
     <div class="role-note">👉 આ ફોનની સ્ક્રીન પર મોટી સ્ક્રીનમાં વિડિયો ચાલશે.</div>
 
     <button class="btn blue" onclick="go('controller')" style="margin-top:16px">🎮 હું નવો ફોન છું<br><span style="font-weight:400;font-size:12px;">(આ ફોનમાં ફક્ત બટન – વિડિયો નહીં ચાલે)</span></button>
     <div class="role-note">👉 આ ફોનમાં ફક્ત Play / Pause / Next / Seek ના બટન હશે. વિડિયો અહીં નહીં ચાલે.</div>
 
     <p class="note">
-      📌 બંને ફોન <b>સમાન વાઇફાઇ / ઇન્ટરનેટ</b> પર હોવા જોઈએ.<br>
-      📌 પહેલા <b>જૂના ફોન (Android 6)</b>માં Player ખોલો, પછી નવા ફોનમાં Controller ખોલો —<br>
-      બંનેમાં એક જ કોડ ભરો.
+      📌 બન્ને ફોન <b>સમાન Wi-Fi / નેટવર્ક</b> પર હોય તો શ્રેષ્ઠ.<br>
+      📌 પહેલા <b>જૂના ફોન</b>માં Player ખોલો, પછી નવા ફોનમાં Controller ખોલો —<br>
+      બન્નેમાં એક જ કોડ ભરો. (જૂના ફોનમાં <b>Chrome</b> browser વાપરો.)
     </p>
   </div>
 
 <script>
-  function newRoom(){
-    var code = String(Math.floor(1000 + Math.random()*9000));
-    document.getElementById('code').value = code;
-  }
+  function newRoom(){ document.getElementById('code').value = String(Math.floor(1000 + Math.random()*9000)); }
   function go(role){
     var code = document.getElementById('code').value.trim();
-    if(code.length < 4){ alert('પહેલા રૂમ કોડ ભરો અથવા "નવો રૂમ બનાવો" દબાવો.'); return; }
+    if(code.length < 4){ alert('પહેલા રૂમ કોડ ભરો અથવા "નવો રૂમ કોડ બનાવો" દબાવો.'); return; }
     window.location.href = role + '.html?room=' + encodeURIComponent(code);
   }
 </script>

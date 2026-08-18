@@ -1,25 +1,8 @@
 {
-  "name": "-",
+  "name": "remote-video-control",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Remote Video Control — one phone controls a video playing on another phone. No server needed (PeerJS/WebRTC).",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/nyravisionai-collab/-.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/nyravisionai-collab/-/issues"
-  },
-  "homepage": "https://github.com/nyravisionai-collab/-#readme",
-  "dependencies": {
-    "express": "^5.2.1",
-    "ws": "^8.21.3"
+    "start": "python3 -m http.server 8080"
   }
 }
