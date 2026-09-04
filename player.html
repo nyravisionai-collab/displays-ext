@@ -18,56 +18,111 @@
   #startOverlay p { font-size:14px; opacity:.75; line-height:1.6; margin-bottom:24px; }
   #startOverlay .codeTag { background:#1a2733; border:1px solid #3a4a5a; padding:10px 20px; border-radius:12px; font-size:26px; letter-spacing:4px; margin-bottom:24px; }
   #startBtn { background:#22d3a0; color:#06251c; border:none; font-size:18px; font-weight:700; padding:16px 40px; border-radius:999px; cursor:pointer; }
-  #statusPill { position:fixed; top:12px; left:0; right:0; text-align:center; z-index:20; pointer-events:none; }
+  #statusPill { position:fixed; top:12px; left:0; right:0; text-align:center; z-index:20; pointer-events:none; transition:opacity .4s; }
   #statusPill span { background:rgba(0,0,0,.55); padding:6px 14px; border-radius:999px; font-size:12px; color:#9fffd9; display:inline-block; }
-  #titleBar { position:fixed; bottom:0; left:0; right:0; z-index:15; text-align:center; padding:18px; background:linear-gradient(transparent, rgba(0,0,0,.85)); }
+  #titleBar { position:fixed; bottom:0; left:0; right:0; z-index:15; text-align:center; padding:18px; background:linear-gradient(transparent, rgba(0,0,0,.85)); pointer-events:none; transition:opacity .4s; }
   #titleBar span { font-size:14px; opacity:.9; }
+  .hud-hidden { opacity:0; }
+
+  /* incoming-file progress (visible both before and after ▶ શરૂ કરો) */
+  #rxBar { position:fixed; left:12px; right:12px; bottom:64px; z-index:60; background:rgba(10,20,28,.92);
+    border:1px solid rgba(255,255,255,.18); border-radius:14px; padding:12px 14px; display:none; pointer-events:none; }
+  #rxBar .rxTitle { font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #rxBar .track { height:8px; background:rgba(255,255,255,.15); border-radius:999px; margin:8px 0 6px; overflow:hidden; }
+  #rxBar .fill { height:100%; width:0; background:#22d3a0; border-radius:999px; transition:width .25s; }
+  #rxBar .rxStat { font-size:12px; opacity:.85; }
 </style>
 </head>
 <body>
   <div id="stage">
     <video id="v" playsinline webkit-playsinline preload="auto"></video>
+    <div id="titleBar"><span id="titleTxt">—</span></div>
+    <div id="statusPill"><span id="pill">કનેક્ટ થઈ રહ્યું છે…</span></div>
+    <div id="rxBar">
+      <div class="rxTitle" id="rxTitle">📥 વિડિયો આવી રહ્યો છે…</div>
+      <div class="track"><div class="fill" id="rxFill"></div></div>
+      <div class="rxStat" id="rxStat"></div>
+    </div>
   </div>
-
-  <div id="titleBar"><span id="titleTxt">—</span></div>
-  <div id="statusPill"><span id="pill">કનેક્ટ થઈ રહ્યું છે…</span></div>
 
   <div id="startOverlay">
     <div class="big">📺</div>
     <h2>વિડિયો પ્લેયર શરૂ કરો</h2>
-    <p>આ જૂનો ફોન છે. અહીં વિડિયો મોટી સ્ક્રીનમાં ચાલશે.<br>નીચેનો બટન દબાવો જેથી ફુલસ્ક્રીન શરૂ થાય.</p>
+    <p>આ જૂનો ફોન છે. અહીં વિડિયો મોટી સ્ક્રીનમાં ચાલશે.<br>નીચેનો બટન દબાવો જેથી ફુલસ્ક્રીન શરૂ થાય.<br><br>
+      વિડિયો <b>નવા ફોન (કંટ્રોલર)</b>માંથી પસંદ કરો — તે અહીં આપમેળે આવી જશે.</p>
     <div class="codeTag" id="codeTag">—</div>
     <button id="startBtn">▶ શરૂ કરો</button>
   </div>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="transfer.js"></script>
 <script>
 (function () {
   'use strict';
   var params = new URLSearchParams(window.location.search);
   var room = (params.get('room') || '').trim();
+  var stage = document.getElementById('stage');
   var v = document.getElementById('v');
   var startOverlay = document.getElementById('startOverlay');
   var startBtn = document.getElementById('startBtn');
   var pill = document.getElementById('pill');
+  var statusPill = document.getElementById('statusPill');
+  var titleBar = document.getElementById('titleBar');
   var titleTxt = document.getElementById('titleTxt');
   var codeTag = document.getElementById('codeTag');
+  var rxBar = document.getElementById('rxBar');
+  var rxTitle = document.getElementById('rxTitle');
+  var rxFill = document.getElementById('rxFill');
+  var rxStat = document.getElementById('rxStat');
 
-  var conn = null;
+  var conn = null;          // active controller connection
+  var rxConn = null;        // connection currently delivering a file
   var peer = null;
   var lastReport = 0;
-  var currentUrl = '';
-  var playOnReady = false;   // remote asked to play before user tapped start
+  var currentKey = '';      // identity of the loaded media ('url:…' or 'file:…')
+  var currentObjUrl = null; // object URL of the loaded local file (revoked on switch)
+  var playOnReady = false;  // remote asked to play before user tapped start
+  var files = {};           // fileId -> { blob, name, size }  (videos received from the controller)
+  var wakeLock = null;
+  var hudTimer = null;
 
   codeTag.textContent = 'રૂમ: ' + (room || '—');
 
-  function setPill(t, ok){ pill.textContent = t; pill.style.color = ok === false ? '#ff8a8a' : (ok ? '#9fffd9' : '#ffd88a'); }
-
-  function goFullscreen(){
-    var el = v;
-    var req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitEnterFullscreen;
-    try { if (req) req.call(el); } catch(e) {}
+  function setPill(t, ok){
+    pill.textContent = t;
+    pill.style.color = ok === false ? '#ff8a8a' : (ok ? '#9fffd9' : '#ffd88a');
+    showHud();
   }
+
+  // ---- HUD (status pill + title) auto-hides while a video is playing ----
+  function showHud(){
+    statusPill.classList.remove('hud-hidden');
+    titleBar.classList.remove('hud-hidden');
+    clearTimeout(hudTimer);
+    if (!v.paused && !v.ended) hudTimer = setTimeout(hideHud, 4000);
+  }
+  function hideHud(){
+    statusPill.classList.add('hud-hidden');
+    titleBar.classList.add('hud-hidden');
+  }
+
+  // Fullscreen the whole stage (video + overlays) so progress/status stay visible.
+  function goFullscreen(){
+    var req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+    try {
+      if (req) { var p = req.call(stage); if (p && p.catch) p.catch(function(){}); }
+      else if (v.webkitEnterFullscreen) v.webkitEnterFullscreen(); // iPhone fallback
+    } catch(e) {}
+  }
+
+  // ---- keep the screen on while a file is arriving (video playback keeps it on by itself) ----
+  function acquireWakeLock(){
+    if (wakeLock || !navigator.wakeLock) return;
+    navigator.wakeLock.request('screen').then(function(l){
+      wakeLock = l; l.addEventListener('release', function(){ wakeLock = null; });
+    }).catch(function(){});
+  }
+  function releaseWakeLock(){ if (wakeLock) { try { wakeLock.release(); } catch(e){} wakeLock = null; } }
 
   function report(type, extra){
     if (!conn || conn.open !== true) return;
@@ -76,41 +131,90 @@
     try { conn.send(obj); } catch(e) {}
   }
 
-  function loadVideo(url, title, playIt){
-    currentUrl = url;
-    titleTxt.textContent = title || '';
-    v.src = url;
-    v.load();
-    if (playIt) {
-      if (startOverlay.style.display === 'none') {
-        var p = v.play(); if (p && p.catch) p.catch(function(){});
-      } else {
-        playOnReady = true;
+  function tryPlay(){
+    var p = v.play(); if (p && p.catch) p.catch(function(){});
+  }
+
+  // m = { url, fileId, title, playing }
+  function loadVideo(m, playIt){
+    var title = m.title || '';
+    var key, src;
+    if (m.fileId) {
+      var f = files[m.fileId];
+      if (!f) {
+        // The controller wants a video we don't have (e.g. this page was reloaded) → ask for it again.
+        titleTxt.textContent = '⏳ ' + (title || 'વિડિયો') + ' — નવા ફોનમાંથી આવવાની રાહ…';
+        showHud();
+        report('file-missing', { fileId: m.fileId });
+        return;
       }
+      key = 'file:' + m.fileId;
+    } else {
+      if (!m.url) return;
+      key = 'url:' + m.url;
+    }
+
+    if (key === currentKey && v.src) {
+      // Same video already loaded (e.g. controller reconnected) → don't restart it.
+      titleTxt.textContent = title;
+      if (playIt && v.paused && startOverlay.style.display === 'none') tryPlay();
+      return;
+    }
+
+    src = m.fileId ? URL.createObjectURL(files[m.fileId].blob) : m.url;
+    var oldObj = currentObjUrl;
+    currentObjUrl = m.fileId ? src : null;
+    currentKey = key;
+    titleTxt.textContent = title;
+    v.src = src;
+    v.load();
+    if (oldObj) { try { URL.revokeObjectURL(oldObj); } catch(e){} }
+    showHud();
+    if (playIt) {
+      if (startOverlay.style.display === 'none') tryPlay();
+      else playOnReady = true;
     }
   }
 
   function handleMsg(m){
     if (!m) return;
     if (m.type === 'hello') {
-      if (m.playlist && m.playlist.length && m.url) {
-        loadVideo(m.url, m.title, m.playing === true);
-      }
+      if (m.url || m.fileId) loadVideo(m, m.playing === true);
     } else if (m.type === 'cmd') {
       var c = m.cmd;
-      if (c === 'toggle') { if (v.paused) v.play(); else v.pause(); }
-      else if (c === 'play') { v.play(); }
+      if (c === 'toggle') { if (v.paused) tryPlay(); else v.pause(); }
+      else if (c === 'play') { tryPlay(); }
       else if (c === 'pause') { v.pause(); }
       else if (c === 'seek') { if (typeof m.value === 'number') { try { v.currentTime = m.value; } catch(e){} } }
       else if (c === 'volume') { try { v.volume = m.value; } catch(e){} }
       else if (c === 'mute') { v.muted = !v.muted; }
-      else if (c === 'play' || c === 'next' || c === 'prev' || c === 'playindex') {
-        // these come with a full load in 'hello' or 'load'; ignore
-      }
     } else if (m.type === 'load') {
-      loadVideo(m.url, m.title, m.playing === true);
+      loadVideo(m, m.playing === true);
     }
   }
+
+  // ---- receiving videos sent from the controller phone ----
+  function showRx(info){
+    var pct = info.size ? Math.floor(info.received * 100 / info.size) : 0;
+    rxTitle.textContent = '📥 વિડિયો આવી રહ્યો છે: ' + info.name;
+    rxFill.style.width = pct + '%';
+    rxStat.textContent = pct + '% • ' + RVTransfer.fmtBytes(info.received) + ' / ' + RVTransfer.fmtBytes(info.size);
+    rxBar.style.display = 'block';
+  }
+  function hideRx(){ rxBar.style.display = 'none'; rxFill.style.width = '0'; }
+
+  var receiver = RVTransfer.createReceiver({
+    send: function(msg){ if (conn && conn.open === true) conn.send(msg); },
+    onStart: function(info){ showRx(info); acquireWakeLock(); setPill('વિડિયો આવી રહ્યો છે…'); },
+    onProgress: showRx,
+    onDone: function(info, blob){
+      files[info.fileId] = { blob: blob, name: info.name, size: info.size };
+      hideRx(); releaseWakeLock(); rxConn = null;
+      setPill('વિડિયો મળ્યો ✓ ' + info.name, true);
+    },
+    onError: function(info, reason){ hideRx(); releaseWakeLock(); rxConn = null; setPill('વિડિયો મેળવવામાં ભૂલ (' + reason + ') — ફરી મોકલો', false); },
+    onCancel: function(){ hideRx(); releaseWakeLock(); rxConn = null; setPill('મોકલવાનું રદ થયું'); }
+  });
 
   // ---- PeerJS (player is the host that others connect to) ----
   var PEER_PREFIX = 'rvideo-';
@@ -120,12 +224,18 @@
     peer.on('open', function(){ setPill('રૂમ તૈયાર — કંટ્રોલરની રાહ જુએ છે'); });
     peer.on('connection', function(connection){
       conn = connection;
-      conn.on('open', function(){
-        setPill('કંટ્રોલર જોડાયેલ છે ✓');
+      connection.on('open', function(){
+        setPill('કંટ્રોલર જોડાયેલ છે ✓', true);
         playOnReady = false;
       });
-      conn.on('data', handleMsg);
-      conn.on('close', function(){ setPill('કંટ્રોલર છૂટું પડ્યું'); conn = null; });
+      connection.on('data', function(m){
+        if (receiver.handleMessage(m)) { if (receiver.isActive()) rxConn = connection; return; }
+        if (connection === conn) handleMsg(m);
+      });
+      connection.on('close', function(){
+        if (rxConn === connection && receiver.isActive()) receiver.cancel('disconnected');
+        if (conn === connection) { conn = null; setPill('કંટ્રોલર છૂટું પડ્યું'); }
+      });
     });
     peer.on('error', function(err){
       var t = 'કનેક્શન ભૂલ';
@@ -139,21 +249,24 @@
   startBtn.addEventListener('click', function(){
     startOverlay.style.display = 'none';
     goFullscreen();
-    if (v.src) { var p = v.play(); if (p && p.catch) p.catch(function(){}); }
-    if (playOnReady) { var p2 = v.play(); if (p2 && p2.catch) p2.catch(function(){}); playOnReady = false; }
+    if (v.src && (playOnReady || !v.paused)) tryPlay();
+    if (playOnReady) { tryPlay(); playOnReady = false; }
   });
 
-  v.addEventListener('play', function(){ report('status'); });
-  v.addEventListener('pause', function(){ report('status'); });
+  v.addEventListener('play', function(){ report('status'); showHud(); });
+  v.addEventListener('pause', function(){ report('status'); showHud(); });
   v.addEventListener('loadedmetadata', function(){ report('status'); });
-  v.addEventListener('ended', function(){ report('ended'); });
+  v.addEventListener('ended', function(){ report('ended'); showHud(); });
+  v.addEventListener('error', function(){ setPill('આ વિડિયો ચાલી શકતો નથી (ફોર્મેટ સપોર્ટેડ નથી?)', false); report('status'); });
   v.addEventListener('timeupdate', function(){
     var now = Date.now();
     if (now - lastReport > 1000) { lastReport = now; report('status'); }
   });
   v.addEventListener('click', function(){
-    var tb = document.getElementById('titleBar');
-    tb.style.display = (tb.style.display === 'none') ? '' : 'none';
+    if (statusPill.classList.contains('hud-hidden')) showHud(); else hideHud();
+  });
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState === 'visible' && receiver.isActive()) acquireWakeLock();
   });
 
   if (!room) { setPill('રૂમ કોડ ખૂટે છે', false); }

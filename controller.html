@@ -12,7 +12,7 @@
   header { text-align:center; margin-bottom:6px; }
   header h1 { font-size:18px; }
   header .room { font-size:13px; opacity:.7; }
-  #pill { display:inline-block; margin-top:8px; background:rgba(0,0,0,.4); padding:5px 14px; border-radius:999px; font-size:12px; color:#9fffd9; }
+  #pill { display:inline-block; margin-top:8px; background:rgba(0,0,0,.4); padding:5px 14px; border-radius:999px; font-size:12px; color:#9fffd9; max-width:100%; }
 
   .np { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:16px; margin:14px 0; }
   .np .lbl { font-size:11px; opacity:.6; letter-spacing:1px; text-transform:uppercase; }
@@ -30,17 +30,34 @@
   .vol .row2 { display:flex; align-items:center; gap:10px; }
   .vol .row2 span { font-size:18px; width:22px; text-align:center; }
 
-  .custom { margin-top:16px; background:rgba(255,255,255,.07); border-radius:14px; padding:12px; }
-  .custom input { width:100%; padding:11px; border-radius:10px; border:1px solid rgba(255,255,255,.25); background:rgba(0,0,0,.25); color:#fff; font-size:13px; outline:none; }
-  .custom button { margin-top:8px; width:100%; padding:12px; border:none; border-radius:10px; background:#f59e0b; color:#231500; font-weight:700; cursor:pointer; font-size:14px; }
+  /* --- pick a video from THIS phone (primary action) --- */
+  .pick { margin:18px 0 6px; }
+  .pickBtn { display:block; width:100%; padding:18px 14px; border:none; border-radius:16px; background:#22d3a0; color:#06251c;
+    font-weight:800; font-size:17px; cursor:pointer; box-shadow:0 8px 24px rgba(34,211,160,.3); text-align:center; }
+  .pickBtn small { display:block; font-weight:500; font-size:12px; margin-top:4px; opacity:.85; }
+  .pickBtn:active { transform:scale(.98); }
+  .hint { font-size:12px; opacity:.65; line-height:1.5; margin-top:8px; text-align:center; }
 
   .list { margin-top:18px; }
   .list h3 { font-size:13px; opacity:.7; margin-bottom:8px; }
-  .listItem { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:12px; padding:12px; margin-bottom:8px; cursor:pointer; }
+  .listItem { display:flex; flex-wrap:wrap; align-items:center; gap:8px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:12px; padding:12px; margin-bottom:8px; cursor:pointer; }
   .listItem.active { border-color:#22d3a0; background:rgba(34,211,160,.12); }
-  .listItem .num { font-size:12px; opacity:.5; width:20px; }
-  .listItem .t { font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .listItem .play { margin-left:auto; }
+  .listItem .num { font-size:12px; opacity:.5; width:20px; flex:none; }
+  .listItem .t { flex:1; min-width:0; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .listItem .ic { flex:none; width:22px; text-align:center; }
+  .listItem .del { flex:none; width:34px; height:34px; border:none; border-radius:10px; background:rgba(255,255,255,.12); color:#fff; font-size:15px; cursor:pointer; }
+  .listItem .meta { width:100%; font-size:11px; opacity:.78; line-height:1.4; }
+  .listItem .bar { width:100%; height:6px; background:rgba(255,255,255,.15); border-radius:999px; overflow:hidden; }
+  .listItem .bar i { display:block; height:100%; width:0; background:#22d3a0; transition:width .25s; }
+  .empty { text-align:center; opacity:.65; font-size:13px; padding:18px 10px; line-height:1.7; border:1px dashed rgba(255,255,255,.25); border-radius:12px; }
+
+  details.adv { margin-top:18px; background:rgba(255,255,255,.05); border-radius:14px; padding:10px 12px; }
+  details.adv summary { cursor:pointer; font-size:13px; opacity:.8; padding:4px 0; }
+  details.adv .custom { margin-top:10px; }
+  .custom input { width:100%; padding:11px; border-radius:10px; border:1px solid rgba(255,255,255,.25); background:rgba(0,0,0,.25); color:#fff; font-size:13px; outline:none; }
+  .custom button { margin-top:8px; width:100%; padding:12px; border:none; border-radius:10px; background:#f59e0b; color:#231500; font-weight:700; cursor:pointer; font-size:14px; }
+  .custom button.ghost { background:rgba(255,255,255,.12); color:#fff; font-weight:600; }
+  .custom p { font-size:12px; opacity:.65; line-height:1.5; margin-top:8px; }
 </style>
 </head>
 <body>
@@ -52,7 +69,7 @@
 
   <!-- Now playing info (NO VIDEO PLAYED HERE) -->
   <div class="np">
-    <div class="lbl">હવે વાગી રહ્યું છે</div>
+    <div class="lbl">જૂના ફોનમાં હવે વાગી રહ્યું છે</div>
     <div class="title" id="npTitle">—</div>
     <input id="seek" type="range" min="0" max="1000" value="0">
     <div class="times"><span id="curT">0:00</span><span id="durT">0:00</span></div>
@@ -70,10 +87,11 @@
     <div class="row2"><span>🔊</span><input id="vol" type="range" min="0" max="100" value="100"><button id="muteBtn" class="cbtn med" style="width:52px;height:44px;font-size:18px;background:rgba(255,255,255,.85)">🔇</button></div>
   </div>
 
-  <!-- Custom URL -->
-  <div class="custom">
-    <input id="url" type="text" placeholder="તમારી વિડિયો લિંક (MP4) પેસ્ટ કરો…">
-    <button id="loadBtn">➕ આ વિડિયો ચલાવો</button>
+  <!-- Pick a video from this phone (gallery / files) -->
+  <div class="pick">
+    <button class="pickBtn" id="pickBtn">📂 આ ફોનમાંથી વિડિયો પસંદ કરો<small>ગેલેરી / ફાઇલમાંથી — વિડિયો આપમેળે જૂના ફોનમાં મોકલાશે</small></button>
+    <input id="fileInput" type="file" accept="video/*,.mp4,.m4v,.mov,.webm,.mkv,.3gp" multiple style="display:none">
+    <div class="hint">કોઈ લિંક કે અપલોડની જરૂર નથી. વિડિયો સીધો આ ફોનમાંથી જૂના ફોનમાં જાય છે — બન્ને ફોન એક જ Wi‑Fi પર હોય તો સૌથી ઝડપી.</div>
   </div>
 
   <!-- Playlist -->
@@ -82,7 +100,19 @@
     <div id="listBox"></div>
   </div>
 
+  <!-- Advanced: play from a link / demo videos -->
+  <details class="adv">
+    <summary>▸ વધુ વિકલ્પો — લિંક વડે ચલાવો / ડેમો વિડિયો</summary>
+    <div class="custom">
+      <input id="url" type="text" placeholder="ઇન્ટરનેટ પરની સીધી વિડિયો લિંક (….mp4)">
+      <button id="loadBtn">🔗 આ લિંક ચલાવો</button>
+      <button id="demoBtn" class="ghost">🎞 ડેમો વિડિયો ઉમેરો (ટેસ્ટ માટે)</button>
+      <p>નોંધ: YouTube / Instagram / WhatsApp ની લિંક અહીં ચાલતી નથી — ફક્ત સીધી .mp4 ફાઇલની લિંક. તમારો પોતાનો વિડિયો ચલાવવા ઉપરનું લીલું બટન વાપરો.</p>
+    </div>
+  </details>
+
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="transfer.js"></script>
 <script>
 (function () {
   'use strict';
@@ -91,7 +121,7 @@
   var PEER_PREFIX = 'rvideo-';
   document.getElementById('roomTag').textContent = 'રૂમ: ' + room;
 
-  // Sample playlist (works on any browser)
+  // Demo videos (optional, added with the "ડેમો વિડિયો ઉમેરો" button)
   var SAMPLES = [
     { title: 'Big Buck Bunny',     url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4' },
     { title: 'Elephants Dream',    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4' },
@@ -100,12 +130,18 @@
     { title: 'For Bigger Blazes',  url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4' }
   ];
 
-  var playlist = SAMPLES.slice();
-  var index = 0;
+  // playlist item: { id, kind:'file'|'url', title, file?, size?, url?, status?, progress?, speed?, eta?, err?, playWhenSent? }
+  //   file status: 'pending' (queued) → 'sending' → 'sent' (player has it) | 'error'
+  var playlist = [];
+  var index = -1;
   var playing = false;
+  var samplesAdded = false;
 
   var peer = null, conn = null, connected = false;
   var seeking = false;
+  var activeTx = null;        // RVTransfer sender currently running
+  var retryTimer = null;
+  var wakeLock = null;
 
   var pill = document.getElementById('pill');
   var npTitle = document.getElementById('npTitle');
@@ -114,131 +150,348 @@
   var durT = document.getElementById('durT');
   var playBtn = document.getElementById('playBtn');
   var volEl = document.getElementById('vol');
+  var listBox = document.getElementById('listBox');
+  var fileInput = document.getElementById('fileInput');
+  var urlInput = document.getElementById('url');
 
   function setPill(t, ok){ pill.textContent = t; pill.style.color = ok === false ? '#ff8a8a' : (ok ? '#9fffd9' : '#ffd88a'); }
   function fmt(s){ s = Math.max(0, Math.floor(s||0)); var m = Math.floor(s/60), sec = s%60; return m + ':' + (sec<10?'0':'') + sec; }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+  function titleFromUrl(u){
+    try { var seg = decodeURIComponent(new URL(u).pathname.split('/').pop() || ''); if (seg) return seg; } catch(e) {}
+    return 'Custom Video';
+  }
 
-  function current(){ return playlist[index] || { title: '', url: '' }; }
+  function current(){ return (index >= 0 && index < playlist.length) ? playlist[index] : null; }
+  function findById(id){ for (var i = 0; i < playlist.length; i++) if (playlist[i].id === id) return playlist[i]; return null; }
+  function isReady(it){ return !!it && (it.kind === 'url' || it.status === 'sent'); }
 
   function send(obj){
-    if (!conn || conn.open !== true) return;
-    try { conn.send(obj); } catch(e) {}
+    if (!conn || conn.open !== true) return false;
+    try { conn.send(obj); return true; } catch(e) { return false; }
   }
 
+  // Message that tells the player which video to show.
+  // File items are referenced by fileId (the player already holds the bytes); url items by url.
+  function descriptor(item, type){
+    var m = { type: type, title: item.title, playing: playing, index: index, count: playlist.length };
+    if (item.kind === 'file') m.fileId = item.id; else m.url = item.url;
+    return m;
+  }
   function sendHello(){
     var c = current();
-    send({ type:'hello', playlist: playlist, index: index, url: c.url, title: c.title, playing: playing, time: 0 });
+    if (isReady(c)) send(descriptor(c, 'hello'));
+    else send({ type: 'hello', playing: false, index: index, count: playlist.length });
   }
 
-  function pushState(){
-    var c = current();
-    send({ type:'hello', playlist: playlist, index: index, url: c.url, title: c.title, playing: playing, time: 0 });
-  }
-
-  function render(){
-    var c = current();
-    npTitle.textContent = c.title || '—';
-    if (!seeking) { curT.textContent = fmt(0); durT.textContent = fmt(0); }
-    playBtn.textContent = playing ? '⏸' : '▶';
-    renderList();
-  }
-
-  function renderList(){
-    var box = document.getElementById('listBox');
-    var html = '';
-    for (var i = 0; i < playlist.length; i++) {
-      var it = playlist[i];
-      html += '<div class="listItem' + (i===index?' active':'') + '" data-i="' + i + '">' +
-        '<span class="num">' + (i+1) + '</span>' +
-        '<span class="t">' + (it.title || 'વિડિયો') + '</span>' +
-        '<span class="play">▶</span></div>';
+  // Make item i current and play it on the player. Files that have not arrived yet
+  // are sent first (moved to the front of the queue) and start playing when done.
+  function playItem(i){
+    if (i < 0 || i >= playlist.length) return;
+    var item = playlist[i];
+    index = i;
+    if (item.kind === 'file' && item.status !== 'sent') {
+      item.playWhenSent = true;
+      if (item.status === 'error') { item.status = 'pending'; item.err = ''; }
+      playing = false;
+      if (!connected) setPill('પ્લેયર જોડાય એટલે આ વિડિયો મોકલાશે અને ચાલશે');
+      else if (item.status === 'sending') setPill('મોકલાઈ રહ્યું છે — પૂરું થતાં જ ચાલશે');
+      else setPill('કતારમાં — મોકલાયા પછી ચાલશે');
+      render();
+      pumpQueue();
+      return;
     }
-    box.innerHTML = html;
-  }
-
-  // ---- buttons ----
-  function cmd(name, value){
-    if (!connected) { alert('પ્લેયર હજુ જોડાયેલું નથી'); return; }
-    var c = current();
-    if (name === 'next') { index = (index + 1) % playlist.length; playing = true; pushState(); }
-    else if (name === 'prev') { index = (index - 1 + playlist.length) % playlist.length; playing = true; pushState(); }
-    else if (name === 'playindex') { index = value; playing = true; pushState(); }
-    else if (name === 'toggle') { playing = !playing; send({type:'cmd', cmd:'toggle', title:c.title}); render(); return; }
-    else if (name === 'seek') { send({type:'cmd', cmd:'seek', value:value}); }
-    else if (name === 'volume') { send({type:'cmd', cmd:'volume', value:value}); }
-    else if (name === 'mute') { send({type:'cmd', cmd:'mute'}); }
+    playing = true;
+    send(descriptor(item, 'load'));
     render();
   }
 
-  document.getElementById('playBtn').addEventListener('click', function(){ cmd('toggle'); });
-  document.getElementById('nextBtn').addEventListener('click', function(){ cmd('next'); });
-  document.getElementById('prevBtn').addEventListener('click', function(){ cmd('prev'); });
+  function step(dir){
+    if (!playlist.length) { setPill('પ્લેલિસ્ટ ખાલી છે — પહેલા આ ફોનમાંથી વિડિયો પસંદ કરો'); return; }
+    var i = index < 0 ? 0 : (index + dir + playlist.length) % playlist.length;
+    playItem(i);
+  }
+
+  function toggle(){
+    if (!connected) { alert('પ્લેયર હજુ જોડાયેલું નથી'); return; }
+    var c = current();
+    if (!c) { if (playlist.length) playItem(0); else setPill('પહેલા "આ ફોનમાંથી વિડિયો પસંદ કરો" દબાવો'); return; }
+    if (!isReady(c)) { playItem(index); return; }
+    playing = !playing;
+    send({ type: 'cmd', cmd: 'toggle' });
+    render();
+  }
+
+  function cmd(name, value){
+    if (!connected) { alert('પ્લેયર હજુ જોડાયેલું નથી'); return; }
+    if (name === 'seek') send({ type: 'cmd', cmd: 'seek', value: value });
+    else if (name === 'volume') send({ type: 'cmd', cmd: 'volume', value: value });
+    else if (name === 'mute') send({ type: 'cmd', cmd: 'mute' });
+  }
+
+  function removeItem(i){
+    var item = playlist[i];
+    if (!item) return;
+    if (activeTx && activeTx.fileId === item.id) activeTx.cancel();
+    playlist.splice(i, 1);
+    if (index === i) { index = -1; if (playing) { playing = false; send({ type: 'cmd', cmd: 'pause' }); } }
+    else if (index > i) index--;
+    render();
+    pumpQueue();
+  }
+
+  // ---- sending files to the player (one at a time) ----
+  function nextPending(){
+    var i, it;
+    for (i = 0; i < playlist.length; i++) { it = playlist[i]; if (it.kind === 'file' && it.status === 'pending' && it.playWhenSent) return it; }
+    for (i = 0; i < playlist.length; i++) { it = playlist[i]; if (it.kind === 'file' && it.status === 'pending') return it; }
+    return null;
+  }
+
+  function pumpQueue(){
+    if (!activeTx && connected) {
+      var item = nextPending();
+      if (item) startTransfer(item);
+    }
+    updateWake();
+  }
+
+  function startTransfer(item){
+    item.status = 'sending'; item.progress = 0; item.speed = 0; item.eta = NaN; item.err = '';
+    var t0 = Date.now(), lastT = t0, lastB = 0;
+    var tx = RVTransfer.sendFile(conn, item.file, {
+      fileId: item.id,
+      onProgress: function(p){
+        var b = p.received || 0;                     // bytes the player confirmed
+        var now = Date.now();
+        if (now - lastT >= 1000) { item.speed = (b - lastB) * 1000 / (now - lastT); lastT = now; lastB = b; }
+        var rate = item.speed > 0 ? item.speed : b * 1000 / Math.max(1, now - t0);
+        item.progress = p.total ? b / p.total : 1;
+        item.eta = rate > 0 ? (p.total - b) / rate : NaN;
+        renderProgress(item);
+      }
+    });
+    activeTx = tx;
+    setPill('📤 મોકલાઈ રહ્યું છે: ' + item.title);
+    render();
+    tx.done.then(function(){
+      activeTx = null;
+      item.status = 'sent'; item.progress = 1;
+      setPill('✓ ' + item.title + ' જૂના ફોનમાં તૈયાર', true);
+      if (item.playWhenSent) { item.playWhenSent = false; playItem(playlist.indexOf(item)); }
+      render();
+      pumpQueue();
+    }, function(e){
+      activeTx = null;
+      var code = e && e.code;
+      if (code === 'disconnected' || code === 'not-connected') { item.status = 'pending'; item.progress = 0; }
+      else if (code === 'cancelled') { /* removed by the user */ }
+      else {
+        item.status = 'error';
+        item.err = code === 'read-failed' ? 'ફાઇલ વાંચી શકાઈ નહીં' : code === 'timeout' ? 'પ્લેયરે જવાબ ન આપ્યો' : ((e && e.message) || 'ભૂલ');
+        setPill('મોકલવામાં ભૂલ: ' + item.err, false);
+      }
+      render();
+      pumpQueue();
+    });
+  }
+
+  // keep the screen on while sending (Android throttles background tabs)
+  function updateWake(){
+    var need = !!activeTx;
+    if (need && !wakeLock && navigator.wakeLock) {
+      navigator.wakeLock.request('screen').then(function(l){ wakeLock = l; l.addEventListener('release', function(){ wakeLock = null; }); }).catch(function(){});
+    } else if (!need && wakeLock) { try { wakeLock.release(); } catch(e){} wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') updateWake(); });
+  window.addEventListener('beforeunload', function(e){ if (activeTx) { e.preventDefault(); e.returnValue = ''; } });
+
+  // ---- rendering ----
+  function fmtEta(sec){ if (!isFinite(sec) || sec < 0) return ''; sec = Math.round(sec); var m = Math.floor(sec/60), s = sec%60; return m + ':' + (s<10?'0':'') + s; }
+  function progressText(it){
+    var s = '📤 મોકલાઈ રહ્યું છે ' + Math.floor((it.progress || 0) * 100) + '%';
+    if (it.speed > 0) s += ' • ' + RVTransfer.fmtBytes(it.speed) + '/s';
+    if (isFinite(it.eta)) s += ' • ~' + fmtEta(it.eta) + ' બાકી';
+    if (it.playWhenSent) s += ' • પૂરું થતાં ચાલશે';
+    return s;
+  }
+  function statusText(it){
+    if (it.kind === 'url') return '🔗 લિંક';
+    if (it.status === 'sent') return '✓ જૂના ફોનમાં તૈયાર • ' + RVTransfer.fmtBytes(it.size);
+    if (it.status === 'sending') return progressText(it);
+    if (it.status === 'error') return '⚠ ' + (it.err || 'ભૂલ') + ' — ફરી મોકલવા દબાવો';
+    return (connected ? '⏳ કતારમાં' : '⏳ પ્લેયર જોડાય એટલે મોકલાશે') + ' • ' + RVTransfer.fmtBytes(it.size) + (it.playWhenSent ? ' • મોકલાયા પછી ચાલશે' : '');
+  }
+  function render(){
+    var c = current();
+    npTitle.textContent = c ? c.title : '—';
+    playBtn.textContent = playing ? '⏸' : '▶';
+    renderList();
+  }
+  function renderList(){
+    if (!playlist.length) {
+      listBox.innerHTML = '<div class="empty">હજુ કોઈ વિડિયો નથી.<br>ઉપરના લીલા બટનથી <b>આ ફોનમાંથી</b> વિડિયો પસંદ કરો —<br>તે આપમેળે જૂના ફોનમાં જઈને ચાલશે.</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < playlist.length; i++) {
+      var it = playlist[i];
+      var sending = it.kind === 'file' && it.status === 'sending';
+      html += '<div class="listItem' + (i === index ? ' active' : '') + '" data-i="' + i + '">' +
+        '<span class="num">' + (i + 1) + '</span>' +
+        '<span class="t">' + esc(it.title || 'વિડિયો') + '</span>' +
+        '<span class="ic">' + (i === index && playing ? '▶' : (sending ? '📤' : (it.kind === 'file' && it.status === 'sent' ? '✓' : ''))) + '</span>' +
+        '<button class="del" data-del="' + i + '" aria-label="કાઢો">✕</button>' +
+        '<span class="meta" data-meta="' + it.id + '">' + esc(statusText(it)) + '</span>' +
+        (sending ? '<span class="bar"><i data-bar="' + it.id + '" style="width:' + Math.floor((it.progress || 0) * 100) + '%"></i></span>' : '') +
+        '</div>';
+    }
+    listBox.innerHTML = html;
+  }
+  function renderProgress(it){
+    var meta = listBox.querySelector('[data-meta="' + it.id + '"]');
+    var bar = listBox.querySelector('[data-bar="' + it.id + '"]');
+    if (meta) meta.textContent = statusText(it);
+    if (bar) bar.style.width = Math.floor((it.progress || 0) * 100) + '%';
+    if (it.status === 'sending') setPill(progressText(it));
+  }
+
+  // ---- UI events ----
+  document.getElementById('playBtn').addEventListener('click', toggle);
+  document.getElementById('nextBtn').addEventListener('click', function(){ step(1); });
+  document.getElementById('prevBtn').addEventListener('click', function(){ step(-1); });
 
   seekEl.addEventListener('input', function(){
     seeking = true;
-    if (durT._dur) curT.textContent = fmt((seekEl.value/1000) * durT._dur);
+    if (durT._dur) curT.textContent = fmt((seekEl.value / 1000) * durT._dur);
   });
   seekEl.addEventListener('change', function(){
     seeking = false;
     var d = durT._dur || 0;
-    if (d > 0) cmd('seek', (seekEl.value/1000) * d);
+    if (d > 0) cmd('seek', (seekEl.value / 1000) * d);
   });
 
-  volEl.addEventListener('change', function(){ cmd('volume', Number(volEl.value)/100); });
+  volEl.addEventListener('change', function(){ cmd('volume', Number(volEl.value) / 100); });
   document.getElementById('muteBtn').addEventListener('click', function(){ cmd('mute'); });
 
+  document.getElementById('pickBtn').addEventListener('click', function(){ fileInput.click(); });
+  fileInput.addEventListener('change', function(){
+    var fl = fileInput.files;
+    if (!fl || !fl.length) return;
+    var firstNew = -1;
+    for (var i = 0; i < fl.length; i++) {
+      var f = fl[i];
+      playlist.push({ id: RVTransfer.genId(), kind: 'file', title: f.name || 'વિડિયો', file: f, size: f.size, status: 'pending', progress: 0 });
+      if (firstNew < 0) firstNew = playlist.length - 1;
+    }
+    fileInput.value = '';
+    // nothing selected yet → this one plays automatically as soon as it has arrived
+    if (!current()) { index = firstNew; playlist[firstNew].playWhenSent = true; }
+    setPill(connected ? 'વિડિયો મોકલાઈ રહ્યો છે…' : 'વિડિયો કતારમાં — પ્લેયર જોડાય એટલે મોકલાશે');
+    render();
+    pumpQueue();
+  });
+
   document.getElementById('loadBtn').addEventListener('click', function(){
-    var u = document.getElementById('url').value.trim();
+    var u = urlInput.value.trim();
     if (!u) { alert('લિંક ભરો'); return; }
-    playlist = [{ title: 'Custom Video', url: u }];
-    index = 0; playing = true;
-    pushState();
+    if (!/^https?:\/\//i.test(u)) { alert('લિંક http:// અથવા https:// થી શરૂ થવી જોઈએ'); return; }
+    playlist.push({ id: RVTransfer.genId(), kind: 'url', title: titleFromUrl(u), url: u });
+    urlInput.value = '';
+    if (connected) playItem(playlist.length - 1); else { index = playlist.length - 1; render(); }
+  });
+
+  document.getElementById('demoBtn').addEventListener('click', function(){
+    if (samplesAdded) { setPill('ડેમો વિડિયો પહેલેથી ઉમેરેલા છે'); return; }
+    samplesAdded = true;
+    var first = playlist.length;
+    for (var i = 0; i < SAMPLES.length; i++) playlist.push({ id: RVTransfer.genId(), kind: 'url', title: SAMPLES[i].title, url: SAMPLES[i].url });
+    if (!current()) { if (connected) { playItem(first); return; } index = first; }
     render();
   });
 
-  document.getElementById('listBox').addEventListener('click', function(e){
+  listBox.addEventListener('click', function(e){
+    var del = e.target.closest ? e.target.closest('[data-del]') : null;
+    if (del) { removeItem(Number(del.getAttribute('data-del'))); return; }
     var item = e.target.closest ? e.target.closest('.listItem') : null;
     if (!item) return;
-    cmd('playindex', Number(item.getAttribute('data-i')));
+    var i = Number(item.getAttribute('data-i'));
+    if (i === index && isReady(playlist[i]) && connected) { toggle(); return; }
+    playItem(i);
   });
 
-  // ---- PeerJS (controller connects to player) ----
+  // ---- PeerJS (controller connects to player; reconnects automatically) ----
+  function scheduleRetry(ms){ clearTimeout(retryTimer); retryTimer = setTimeout(openConn, ms || 3000); }
+
+  function openConn(){
+    if (!peer || peer.destroyed) return;
+    if (conn && conn.open === true) return;
+    if (peer.disconnected) { peer.reconnect(); return; }   // 'open' fires again → openConn()
+    if (conn) { try { conn.close(); } catch(e) {} }
+    setPill('પ્લેયર શોધી રહ્યા છીએ…');
+    var c = peer.connect(PEER_PREFIX + room, { reliable: true });
+    if (!c) { scheduleRetry(); return; }
+    conn = c;
+    c.on('open', function(){
+      if (conn !== c) return;
+      connected = true;
+      setPill('પ્લેયર જોડાયેલ છે ✓', true);
+      sendHello();
+      render();
+      pumpQueue();
+    });
+    c.on('data', function(m){ if (conn === c) handleMsg(m); });
+    c.on('close', function(){
+      if (conn !== c) return;
+      connected = false; conn = null;
+      setPill('પ્લેયર છૂટું પડ્યું — ફરી જોડાઈ રહ્યા છીએ…', false);
+      render();
+      scheduleRetry();
+    });
+    c.on('error', function(){
+      if (conn !== c) return;
+      connected = false;
+      setPill('કનેક્શન ભૂલ — ફરી પ્રયત્ન…', false);
+      scheduleRetry();
+    });
+  }
+
   function connect(){
     if (!window.Peer) { setPill('PeerJS લોડ ન થયું — ઇન્ટરનેટ ચેક કરો', false); return; }
     peer = new Peer();
-    peer.on('open', function(){
-      setPill('પ્લેયર શોધી રહ્યા છીએ…');
-      conn = peer.connect(PEER_PREFIX + room, { reliable: true });
-      conn.on('open', function(){
-        connected = true;
-        setPill('પ્લેયર જોડાયેલ છે ✓');
-        sendHello();
-      });
-      conn.on('data', handleMsg);
-      conn.on('close', function(){ connected = false; setPill('પ્લેયર છૂટું પડ્યું', false); });
-      conn.on('error', function(){ connected = false; setPill('કનેક્શન ભૂલ', false); });
-    });
+    peer.on('open', openConn);
     peer.on('error', function(err){
-      var t = 'કનેક્શન ભૂલ';
-      if (err && err.type === 'peer-unavailable') t = 'પ્લેયર નથી — જૂના ફોનમાં Player ખોલો (એ જ કોડ)';
-      setPill(t, false);
+      if (err && err.type === 'peer-unavailable') {
+        setPill('પ્લેયર નથી — જૂના ફોનમાં Player ખોલો (એ જ કોડ). ફરી શોધીએ છીએ…', false);
+        if (conn && conn.open !== true) { try { conn.close(); } catch(e) {} conn = null; }
+        scheduleRetry(4000);
+      } else if (err && (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error' || err.type === 'socket-closed')) {
+        setPill('નેટવર્ક ભૂલ — ફરી પ્રયત્ન…', false);
+        scheduleRetry(5000);
+      } else {
+        setPill('કનેક્શન ભૂલ', false);
+      }
     });
     peer.on('disconnected', function(){ if (!peer.destroyed) peer.reconnect(); });
   }
 
   function handleMsg(m){
-    if (!m) return;
+    if (!m || typeof m !== 'object') return;
+    if (activeTx && activeTx.handleMessage(m)) return;
     if (m.type === 'status') {
-      if (!seeking) { curT.textContent = fmt(m.time); }
+      if (!seeking) {
+        curT.textContent = fmt(m.time);
+        if (m.duration) seekEl.value = Math.round((m.time / m.duration) * 1000);
+      }
       if (m.duration) { durT.textContent = fmt(m.duration); durT._dur = m.duration; }
-      playing = m.playing;
+      playing = !!m.playing;
       playBtn.textContent = playing ? '⏸' : '▶';
     } else if (m.type === 'ended') {
-      // auto-next
-      index = (index + 1) % playlist.length;
-      playing = true;
-      pushState();
-      render();
+      step(1);                                   // auto-next
+    } else if (m.type === 'file-missing') {
+      // player (re)opened and no longer has this file → send it again
+      var item = findById(String(m.fileId));
+      if (item && item.kind === 'file') { item.status = 'pending'; item.progress = 0; item.playWhenSent = true; render(); pumpQueue(); }
     }
   }
 
