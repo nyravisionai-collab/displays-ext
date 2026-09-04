@@ -33,8 +33,11 @@
 - ⏮ Previous / ⏭ Next (પ્લેલિસ્ટમાં)
 - ⏩ Seek (વિડિયોમાં આગળ-પાછળ)
 - 🔊 Volume + 🔇 Mute
+- 📁 કંટ્રોલર ફોનની Gallery / Filesમાંથી સીધી વિડિયો ફાઇલ પસંદ કરીને પ્લેયર ફોનમાં મોકલવી અને ચલાવવી
 - ➕ કસ્ટમ વિડિયો લિંક (MP4) ચલાવવી
 - 📋 પ્લેલિસ્ટમાંથી કોઈ પણ વિડિયો પસંદ કરવો
+
+> પસંદ કરેલો વિડિયો supported browserમાં WebRTC દ્વારા તરત **live stream** થાય છે; આખી ફાઇલ upload થવાની રાહ જોવી પડતી નથી અને કોઈ server પર upload થતી નથી. Streaming દરમિયાન Controllerનું પેજ ખુલ્લું રાખો. `captureStream` support ન કરતા browserમાં app આપમેળે chunk-based direct transfer વાપરે છે.
 
 ## ટેકનિકલ નોંધ
 
