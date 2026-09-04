@@ -32,7 +32,11 @@
 
   .custom { margin-top:16px; background:rgba(255,255,255,.07); border-radius:14px; padding:12px; }
   .custom input { width:100%; padding:11px; border-radius:10px; border:1px solid rgba(255,255,255,.25); background:rgba(0,0,0,.25); color:#fff; font-size:13px; outline:none; }
-  .custom button { margin-top:8px; width:100%; padding:12px; border:none; border-radius:10px; background:#f59e0b; color:#231500; font-weight:700; cursor:pointer; font-size:14px; }
+  .custom button, .filePick { margin-top:8px; width:100%; padding:12px; border:none; border-radius:10px; background:#f59e0b; color:#231500; font-weight:700; cursor:pointer; font-size:14px; display:block; text-align:center; }
+  .filePick { background:#22d3a0; color:#06251c; }
+  #file { position:absolute; width:1px; height:1px; opacity:0; overflow:hidden; }
+  #uploadStatus { display:none; margin-top:10px; font-size:12px; line-height:1.5; color:#bfffe9; }
+  #uploadProgress { width:100%; height:8px; margin-top:6px; accent-color:#22d3a0; }
 
   .list { margin-top:18px; }
   .list h3 { font-size:13px; opacity:.7; margin-bottom:8px; }
@@ -70,10 +74,18 @@
     <div class="row2"><span>🔊</span><input id="vol" type="range" min="0" max="100" value="100"><button id="muteBtn" class="cbtn med" style="width:52px;height:44px;font-size:18px;background:rgba(255,255,255,.85)">🔇</button></div>
   </div>
 
-  <!-- Custom URL -->
+  <!-- Phone file or custom URL -->
   <div class="custom">
+    <input id="file" type="file" accept="video/*">
+    <video id="streamSource" playsinline style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"></video>
+    <label class="filePick" for="file">📡 ફોનમાંથી વિડિયો લાઇવ સ્ટ્રીમ કરો</label>
+    <div id="uploadStatus">
+      <span id="uploadText">વિડિયો મોકલાઈ રહ્યો છે…</span>
+      <progress id="uploadProgress" max="100" value="0"></progress>
+    </div>
+    <div style="text-align:center;opacity:.55;font-size:12px;margin:12px 0 8px">અથવા</div>
     <input id="url" type="text" placeholder="તમારી વિડિયો લિંક (MP4) પેસ્ટ કરો…">
-    <button id="loadBtn">➕ આ વિડિયો ચલાવો</button>
+    <button id="loadBtn">🔗 આ લિંકનો વિડિયો ચલાવો</button>
   </div>
 
   <!-- Playlist -->
@@ -105,7 +117,11 @@
   var playing = false;
 
   var peer = null, conn = null, connected = false;
-  var seeking = false;
+  var mediaCall = null, streamSourceUrl = '', streamingMode = false;
+  var streamSource = document.getElementById('streamSource');
+  var seeking = false, uploading = false;
+  var CHUNK_SIZE = 64 * 1024;
+  var MAX_BUFFERED = 1024 * 1024;
 
   var pill = document.getElementById('pill');
   var npTitle = document.getElementById('npTitle');
@@ -138,7 +154,7 @@
   function render(){
     var c = current();
     npTitle.textContent = c.title || '—';
-    if (!seeking) { curT.textContent = fmt(0); durT.textContent = fmt(0); }
+    if (!seeking && !streamingMode) { curT.textContent = fmt(0); durT.textContent = fmt(0); }
     playBtn.textContent = playing ? '⏸' : '▶';
     renderList();
   }
@@ -160,6 +176,21 @@
   function cmd(name, value){
     if (!connected) { alert('પ્લેયર હજુ જોડાયેલું નથી'); return; }
     var c = current();
+    if (streamingMode) {
+      if (name === 'toggle') {
+        if (streamSource.paused) streamSource.play().catch(function(){}); else streamSource.pause();
+        playing = !streamSource.paused;
+      } else if (name === 'seek' && typeof value === 'number') {
+        try { streamSource.currentTime = value; } catch(e) {}
+      } else if (name === 'volume') {
+        send({type:'cmd', cmd:'volume', value:value});
+      } else if (name === 'mute') {
+        send({type:'cmd', cmd:'mute'});
+      } else if (name === 'next' || name === 'prev' || name === 'playindex') {
+        stopStreaming();
+      }
+      if (streamingMode) { render(); return; }
+    }
     if (name === 'next') { index = (index + 1) % playlist.length; playing = true; pushState(); }
     else if (name === 'prev') { index = (index - 1 + playlist.length) % playlist.length; playing = true; pushState(); }
     else if (name === 'playindex') { index = value; playing = true; pushState(); }
@@ -168,6 +199,14 @@
     else if (name === 'volume') { send({type:'cmd', cmd:'volume', value:value}); }
     else if (name === 'mute') { send({type:'cmd', cmd:'mute'}); }
     render();
+  }
+
+  function stopStreaming(){
+    streamingMode = false;
+    streamSource.pause();
+    streamSource.removeAttribute('src'); streamSource.load();
+    if (mediaCall) { try { mediaCall.close(); } catch(e){} mediaCall = null; }
+    if (streamSourceUrl) { URL.revokeObjectURL(streamSourceUrl); streamSourceUrl = ''; }
   }
 
   document.getElementById('playBtn').addEventListener('click', function(){ cmd('toggle'); });
@@ -195,6 +234,114 @@
     pushState();
     render();
   });
+
+  function waitForBuffer(){
+    return new Promise(function(resolve){
+      function check(){
+        var dc = conn && conn.dataChannel;
+        if (!conn || !conn.open) { resolve(false); return; }
+        if (!dc || dc.bufferedAmount < MAX_BUFFERED) { resolve(true); return; }
+        setTimeout(check, 30);
+      }
+      check();
+    });
+  }
+
+  document.getElementById('file').addEventListener('change', async function(e){
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (!connected || !conn || !conn.open) {
+      alert('પહેલા પ્લેયર ફોન જોડો, પછી વિડિયો પસંદ કરો.');
+      e.target.value = '';
+      return;
+    }
+    if (uploading) { alert('એક વિડિયો પહેલેથી મોકલાઈ રહ્યો છે.'); return; }
+
+    // Preferred path: stream decoded audio/video immediately over WebRTC.
+    var capture = streamSource.captureStream || streamSource.mozCaptureStream;
+    if (capture && peer && typeof peer.call === 'function') {
+      var status = document.getElementById('uploadStatus');
+      var text = document.getElementById('uploadText');
+      var progress = document.getElementById('uploadProgress');
+      stopStreaming();
+      status.style.display = 'block'; progress.removeAttribute('value');
+      text.textContent = 'લાઇવ સ્ટ્રીમ શરૂ થઈ રહ્યું છે…';
+      streamSourceUrl = URL.createObjectURL(file);
+      streamSource.src = streamSourceUrl;
+      streamSource.volume = 1;
+      try {
+        await new Promise(function(resolve, reject){
+          streamSource.onloadedmetadata = resolve;
+          streamSource.onerror = reject;
+          streamSource.load();
+        });
+        var playPromise = streamSource.play();
+        if (playPromise) await playPromise;
+        var mediaStream = capture.call(streamSource);
+        if (!mediaStream || !mediaStream.getTracks().length) throw new Error('empty stream');
+        mediaCall = peer.call(PEER_PREFIX + room, mediaStream, { metadata:{ name:file.name } });
+        streamingMode = true;
+        playing = true;
+        npTitle.textContent = file.name;
+        durT._dur = streamSource.duration || 0;
+        durT.textContent = fmt(durT._dur);
+        progress.value = 100;
+        text.textContent = '● લાઇવ સ્ટ્રીમ ચાલી રહ્યું છે — આ પેજ ખુલ્લું રાખો';
+        mediaCall.on('close', function(){ if (streamingMode) text.textContent = 'સ્ટ્રીમ બંધ થયું'; });
+        e.target.value = '';
+        render();
+        return;
+      } catch(err) {
+        stopStreaming();
+        progress.value = 0;
+        text.textContent = 'લાઇવ સ્ટ્રીમ ઉપલબ્ધ નથી — ફાઇલ સીધી મોકલાઈ રહી છે…';
+      }
+    }
+
+    // Fallback for browsers without captureStream support: transfer in chunks.
+    uploading = true;
+    var status = document.getElementById('uploadStatus');
+    var text = document.getElementById('uploadText');
+    var progress = document.getElementById('uploadProgress');
+    status.style.display = 'block'; progress.value = 0;
+    var transferId = Date.now() + '-' + Math.random().toString(36).slice(2);
+    var totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+    try {
+      send({ type:'file-start', id:transferId, name:file.name, mime:file.type || 'video/mp4', size:file.size, total:totalChunks });
+      for (var i = 0; i < totalChunks; i++) {
+        var ready = await waitForBuffer();
+        if (!ready) throw new Error('connection closed');
+        var data = await file.slice(i * CHUNK_SIZE, Math.min(file.size, (i + 1) * CHUNK_SIZE)).arrayBuffer();
+        conn.send({ type:'file-chunk', id:transferId, index:i, data:data });
+        var pct = Math.round(((i + 1) / totalChunks) * 100);
+        progress.value = pct;
+        text.textContent = 'વિડિયો મોકલાઈ રહ્યો છે… ' + pct + '%';
+      }
+      send({ type:'file-end', id:transferId });
+      text.textContent = 'વિડિયો મોકલાઈ ગયો — પ્લેયરમાં તૈયાર થઈ રહ્યો છે…';
+    } catch(err) {
+      text.textContent = 'વિડિયો મોકલવામાં ભૂલ આવી. ફરી પ્રયત્ન કરો.';
+      alert('ફાઇલ મોકલાઈ નથી. બંને ફોનનું કનેક્શન ચેક કરો.');
+    } finally {
+      uploading = false;
+      e.target.value = '';
+    }
+  });
+
+  streamSource.addEventListener('timeupdate', function(){
+    if (!streamingMode || seeking) return;
+    var d = streamSource.duration || 0;
+    durT._dur = d;
+    curT.textContent = fmt(streamSource.currentTime);
+    durT.textContent = fmt(d);
+    if (d) seekEl.value = Math.round((streamSource.currentTime / d) * 1000);
+    playing = !streamSource.paused;
+    playBtn.textContent = playing ? '⏸' : '▶';
+  });
+  streamSource.addEventListener('play', function(){ playing = true; playBtn.textContent = '⏸'; });
+  streamSource.addEventListener('pause', function(){ playing = false; playBtn.textContent = '▶'; });
+  streamSource.addEventListener('ended', function(){ playing = false; playBtn.textContent = '▶'; });
 
   document.getElementById('listBox').addEventListener('click', function(e){
     var item = e.target.closest ? e.target.closest('.listItem') : null;
@@ -233,8 +380,12 @@
       if (m.duration) { durT.textContent = fmt(m.duration); durT._dur = m.duration; }
       playing = m.playing;
       playBtn.textContent = playing ? '⏸' : '▶';
+    } else if (m.type === 'file-ready') {
+      document.getElementById('uploadProgress').value = 100;
+      document.getElementById('uploadText').textContent = '✓ વિડિયો પ્લેયરમાં તૈયાર છે';
+      npTitle.textContent = m.name || 'ફોનનો વિડિયો';
     } else if (m.type === 'ended') {
-      // auto-next
+      // auto-next (uploaded phone files are not part of the URL playlist)
       index = (index + 1) % playlist.length;
       playing = true;
       pushState();
