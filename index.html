@@ -2,7 +2,14 @@
 <html lang="gu">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f2027">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>રિમોટ વિડિયો કંટ્રોલ</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -32,6 +39,11 @@
   .divider span { padding: 0 10px; }
   .note { font-size: 12px; opacity: .6; margin-top: 16px; line-height: 1.6; }
   .role-note { font-size: 13px; background: rgba(0,0,0,.25); border-radius: 10px; padding: 10px; margin-top: 8px; line-height: 1.5; opacity: .9;}
+  #installBtn { display:none; width:100%; padding:13px; margin-top:14px; border:1px solid rgba(255,255,255,.35); border-radius:12px;
+    background:rgba(255,255,255,.12); color:#fff; font-size:14px; font-weight:700; cursor:pointer; }
+  #lastChip { display:none; margin-top:12px; background:rgba(34,211,160,.12); border:1px solid rgba(34,211,160,.4); border-radius:12px;
+    padding:12px; font-size:13px; line-height:1.5; text-align:left; }
+  #lastChip b { color:#9fffd9; }
 </style>
 </head>
 <body>
@@ -49,10 +61,13 @@
     <div class="divider"><span>કયા ફોનથી શું?</span></div>
 
     <button class="btn green" onclick="go('player')">🎬 હું જૂનો ફોન છું<br><span style="font-weight:400;font-size:12px;">(આ ફોનમાં વિડિયો ચાલશે)</span></button>
-    <div class="role-note">👉 આ ફોનની સ્ક્રીન પર મોટી સ્ક્રીનમાં વિડિયો ચાલશે.</div>
+    <div class="role-note">👉 આ ફોનની સ્ક્રીન પર મોટી સ્ક્રીનમાં વિડિયો ચાલશે. સ્ક્રીન બંધ કરશો તો પણ અવાજ ચાલુ રહેશે.</div>
 
     <button class="btn blue" onclick="go('controller')" style="margin-top:16px">🎮 હું નવો ફોન છું<br><span style="font-weight:400;font-size:12px;">(ગેલેરીમાંથી વિડિયો પસંદ કરો + બટન)</span></button>
-    <div class="role-note">👉 આ ફોનની ગેલેરીમાંથી વિડિયો પસંદ કરો — તે જૂના ફોનમાં ચાલશે. અહીં Play / Pause / Seek / Volume ના બટન હશે.</div>
+    <div class="role-note">👉 આ ફોનની ગેલેરીમાંથી વિડિયો પસંદ કરો — તે જૂના ફોનમાં ચાલશે. વિડિયો પ્લેયર પર સેવ થઈ જાય પછી આ પેજ બંધ કરી શકશો.</div>
+
+    <div id="lastChip"></div>
+    <button id="installBtn" data-rvc-install>📲 એપ તરીકે ઇન્સ્ટોલ કરો</button>
 
     <p class="note">
       📌 બન્ને ફોન <b>સમાન Wi-Fi / નેટવર્ક</b> પર હોય તો શ્રેષ્ઠ.<br>
@@ -61,13 +76,27 @@
     </p>
   </div>
 
+<script src="pwa.js"></script>
 <script>
   function newRoom(){ document.getElementById('code').value = String(Math.floor(1000 + Math.random()*9000)); }
   function go(role){
     var code = document.getElementById('code').value.trim();
     if(code.length < 4){ alert('પહેલા રૂમ કોડ ભરો અથવા "નવો રૂમ કોડ બનાવો" દબાવો.'); return; }
+    if (window.rvcSaveSession) rvcSaveSession(code, role);
     window.location.href = role + '.html?room=' + encodeURIComponent(code);
   }
+  // છેલ્લો રૂમ યાદ રાખો → એક ટેપમાં ફરી ખોલો
+  (function(){
+    var s = window.rvcGetSession ? rvcGetSession() : {room:'', role:''};
+    if (!s.room) return;
+    var codeEl = document.getElementById('code');
+    if (!codeEl.value) codeEl.value = s.room;
+    var roleGu = s.role === 'player' ? 'પ્લેયર (જૂનો ફોન)' : 'કંટ્રોલર (નવો ફોન)';
+    var chip = document.getElementById('lastChip');
+    chip.style.display = 'block';
+    chip.innerHTML = '🕘 છેલ્લે વપરાયેલું: <b>' + roleGu + '</b> — રૂમ <b>' + s.room + '</b><br>' +
+      '<a href="#" onclick="go(\'' + (s.role || 'controller') + '\');return false;" style="color:#9fffd9;font-weight:700;">➜ એ જ રૂમ ફરી ખોલો</a>';
+  })();
 </script>
 </body>
 </html>
