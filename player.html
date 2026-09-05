@@ -2,15 +2,45 @@
 <html lang="gu">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>વિડિયો પ્લેયર</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; }
   html, body { width:100%; height:100%; background:#000; color:#fff; font-family: system-ui, Roboto, sans-serif; overflow:hidden; }
-  #stage { width:100%; height:100%; background:#000; display:flex; align-items:center; justify-content:center; }
+  #stage { position:fixed; inset:0; background:#000; }
   video { width:100%; height:100%; background:#000; object-fit: contain; display:block; }
+
+  /* idle screen shown when no video yet */
+  #idle { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:30px; z-index:10;
+    background: radial-gradient(circle at 50% 40%, #1b2f3a, #000 70%); }
+  #idle .ic { font-size:56px; margin-bottom:14px; }
+  #idle h2 { font-size:18px; margin-bottom:8px; }
+  #idle p { font-size:13px; opacity:.7; line-height:1.6; }
+  #idle .codeTag { margin-top:18px; background:#1a2733; border:1px solid #3a4a5a; padding:8px 18px; border-radius:12px; font-size:24px; letter-spacing:4px; }
+  #idle.hidden { display:none; }
+
+  /* top status */
+  #top { position:fixed; top:0; left:0; right:0; z-index:20; padding:12px; text-align:center; pointer-events:none;
+    background:linear-gradient(rgba(0,0,0,.7), transparent); transition:opacity .3s; }
+  #pill { background:rgba(0,0,0,.55); padding:5px 14px; border-radius:999px; font-size:12px; color:#9fffd9; display:inline-block; }
+
+  /* bottom overlay */
+  #bar { position:fixed; bottom:0; left:0; right:0; z-index:20; padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+    background:linear-gradient(transparent, rgba(0,0,0,.85)); transition:opacity .3s; }
+  #titleTxt { font-size:14px; opacity:.9; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:8px; }
+  .prog { height:4px; background:rgba(255,255,255,.25); border-radius:2px; overflow:hidden; }
+  .prog i { display:block; height:100%; width:0; background:#22d3a0; }
+  .times { display:flex; justify-content:space-between; font-size:11px; opacity:.75; margin-top:5px; }
+  .ui-hidden #top, .ui-hidden #bar { opacity:0; }
+
+  /* big centre feedback icon */
+  #flash { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%) scale(.8); z-index:25; pointer-events:none;
+    width:84px; height:84px; border-radius:50%; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center;
+    font-size:38px; opacity:0; transition:opacity .25s, transform .25s; }
+  #flash.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
+
   #startOverlay { position:fixed; inset:0; background:#000; z-index:50; display:flex; flex-direction:column;
     align-items:center; justify-content:center; text-align:center; padding:30px; }
   #startOverlay .big { font-size:52px; margin-bottom:16px; }
@@ -18,10 +48,6 @@
   #startOverlay p { font-size:14px; opacity:.75; line-height:1.6; margin-bottom:24px; }
   #startOverlay .codeTag { background:#1a2733; border:1px solid #3a4a5a; padding:10px 20px; border-radius:12px; font-size:26px; letter-spacing:4px; margin-bottom:24px; }
   #startBtn { background:#22d3a0; color:#06251c; border:none; font-size:18px; font-weight:700; padding:16px 40px; border-radius:999px; cursor:pointer; }
-  #statusPill { position:fixed; top:12px; left:0; right:0; text-align:center; z-index:20; pointer-events:none; }
-  #statusPill span { background:rgba(0,0,0,.55); padding:6px 14px; border-radius:999px; font-size:12px; color:#9fffd9; display:inline-block; }
-  #titleBar { position:fixed; bottom:0; left:0; right:0; z-index:15; text-align:center; padding:18px; background:linear-gradient(transparent, rgba(0,0,0,.85)); }
-  #titleBar span { font-size:14px; opacity:.9; }
 </style>
 </head>
 <body>
@@ -29,8 +55,20 @@
     <video id="v" playsinline webkit-playsinline preload="auto"></video>
   </div>
 
-  <div id="titleBar"><span id="titleTxt">—</span></div>
-  <div id="statusPill"><span id="pill">કનેક્ટ થઈ રહ્યું છે…</span></div>
+  <div id="idle">
+    <div class="ic">📺</div>
+    <h2>વિડિયોની રાહ જુએ છે…</h2>
+    <p>નવા ફોન (કંટ્રોલર)માં<br><b>"ગેલેરીમાંથી વિડિયો પસંદ કરો"</b> દબાવો.</p>
+    <div class="codeTag" id="idleCode">—</div>
+  </div>
+
+  <div id="top"><span id="pill">કનેક્ટ થઈ રહ્યું છે…</span></div>
+  <div id="bar">
+    <span id="titleTxt">—</span>
+    <div class="prog"><i id="progFill"></i></div>
+    <div class="times"><span id="curT">0:00</span><span id="durT">0:00</span></div>
+  </div>
+  <div id="flash">▶</div>
 
   <div id="startOverlay">
     <div class="big">📺</div>
@@ -51,73 +89,93 @@
   var startBtn = document.getElementById('startBtn');
   var pill = document.getElementById('pill');
   var titleTxt = document.getElementById('titleTxt');
-  var codeTag = document.getElementById('codeTag');
+  var idle = document.getElementById('idle');
+  var progFill = document.getElementById('progFill');
+  var curT = document.getElementById('curT');
+  var durT = document.getElementById('durT');
+  var flash = document.getElementById('flash');
 
-  var conn = null;
-  var peer = null;
+  var conn = null, peer = null;
   var lastReport = 0;
-  var currentUrl = '';
   var localObjectUrl = '';
   var incomingFile = null;
-  var playOnReady = false;   // remote asked to play before user tapped start
+  var started = false;
+  var playOnReady = false;
+  var streamDuration = 0;     // duration provided by controller for live stream
+  var hideTimer = null, flashTimer = null;
+  var wakeLock = null;
 
-  codeTag.textContent = 'રૂમ: ' + (room || '—');
+  document.getElementById('codeTag').textContent = 'રૂમ: ' + (room || '—');
+  document.getElementById('idleCode').textContent = 'રૂમ: ' + (room || '—');
 
   function setPill(t, ok){ pill.textContent = t; pill.style.color = ok === false ? '#ff8a8a' : (ok ? '#9fffd9' : '#ffd88a'); }
+  function fmt(s){ s = Math.max(0, Math.floor(s||0)); var m = Math.floor(s/60), sec = s%60; return m + ':' + (sec<10?'0':'') + sec; }
 
   function goFullscreen(){
-    var el = v;
-    var req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitEnterFullscreen;
+    var el = document.documentElement;
+    var req = el.requestFullscreen || el.webkitRequestFullscreen;
     try { if (req) req.call(el); } catch(e) {}
+    try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){}); } catch(e) {}
+  }
+  async function keepAwake(){
+    try { if ('wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', function(){ wakeLock = null; }); } } catch(e) {}
+  }
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible' && started) keepAwake(); });
+
+  function showUI(){
+    document.body.classList.remove('ui-hidden');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(function(){ if (!v.paused) document.body.classList.add('ui-hidden'); }, 3000);
+  }
+  function showFlash(ic){
+    flash.textContent = ic; flash.classList.add('show');
+    clearTimeout(flashTimer); flashTimer = setTimeout(function(){ flash.classList.remove('show'); }, 600);
+  }
+  function getDuration(){ var d = v.duration; return (isFinite(d) && d > 0) ? d : streamDuration; }
+  function updateBar(){
+    var d = getDuration(), t = v.currentTime || 0;
+    curT.textContent = fmt(t); durT.textContent = fmt(d);
+    progFill.style.width = d ? Math.min(100, (t / d) * 100) + '%' : '0%';
   }
 
   function report(type, extra){
     if (!conn || conn.open !== true) return;
-    var obj = { type: type, time: v.currentTime || 0, duration: v.duration || 0, playing: !v.paused };
+    var obj = { type: type, time: v.currentTime || 0, duration: getDuration(), playing: !v.paused, muted: v.muted };
     if (extra) { for (var k in extra) obj[k] = extra[k]; }
     try { conn.send(obj); } catch(e) {}
   }
 
-  function loadVideo(url, title, playIt, keepObjectUrl){
-    if (!keepObjectUrl && localObjectUrl) {
-      URL.revokeObjectURL(localObjectUrl);
-      localObjectUrl = '';
-    }
-    currentUrl = url;
-    titleTxt.textContent = title || '';
+  function tryPlay(){
+    if (!started) { playOnReady = true; return; }
+    var p = v.play(); if (p && p.catch) p.catch(function(){});
+  }
+  function haveVideo(title){
+    idle.classList.add('hidden');
+    titleTxt.textContent = title || 'વિડિયો';
+    showUI();
+  }
+
+  function loadBlobVideo(url, title){
+    streamDuration = 0;
     if (v.srcObject) v.srcObject = null;
-    v.src = url;
-    v.load();
-    if (playIt) {
-      if (startOverlay.style.display === 'none') {
-        var p = v.play(); if (p && p.catch) p.catch(function(){});
-      } else {
-        playOnReady = true;
-      }
-    }
+    v.src = url; v.load();
+    haveVideo(title);
+    tryPlay();
   }
 
   function handleMsg(m){
     if (!m) return;
-    if (m.type === 'hello') {
-      if (m.playlist && m.playlist.length && m.url) {
-        loadVideo(m.url, m.title, m.playing === true);
-      }
-    } else if (m.type === 'cmd') {
+    if (m.type === 'hello') { report('status'); }
+    else if (m.type === 'cmd') {
       var c = m.cmd;
-      if (c === 'toggle') { if (v.paused) v.play(); else v.pause(); }
-      else if (c === 'play') { v.play(); }
-      else if (c === 'pause') { v.pause(); }
+      if (c === 'toggle') { if (v.paused) { tryPlay(); showFlash('▶'); } else { v.pause(); showFlash('⏸'); } }
       else if (c === 'seek') { if (typeof m.value === 'number') { try { v.currentTime = m.value; } catch(e){} } }
-      else if (c === 'volume') { try { v.volume = m.value; } catch(e){} }
-      else if (c === 'mute') { v.muted = !v.muted; }
-      else if (c === 'play' || c === 'next' || c === 'prev' || c === 'playindex') {
-        // these come with a full load in 'hello' or 'load'; ignore
-      }
-    } else if (m.type === 'load') {
-      loadVideo(m.url, m.title, m.playing === true);
+      else if (c === 'skip') { if (typeof m.value === 'number') { try { v.currentTime = Math.max(0, v.currentTime + m.value); } catch(e){} showFlash(m.value < 0 ? '⏪' : '⏩'); } }
+      else if (c === 'volume') { try { v.volume = Math.max(0, Math.min(1, m.value)); } catch(e){} showFlash('🔊'); }
+      else if (c === 'mute') { v.muted = !v.muted; showFlash(v.muted ? '🔇' : '🔊'); report('status'); }
+      showUI();
     } else if (m.type === 'file-start') {
-      incomingFile = { id:m.id, name:m.name || 'વિડિયો', mime:m.mime || 'video/mp4', size:m.size || 0, total:m.total || 0, chunks:[], received:0 };
+      incomingFile = { id:m.id, name:m.name || 'વિડિયો', mime:m.mime || 'video/mp4', total:m.total || 0, chunks:[], received:0 };
       setPill('વિડિયો આવી રહ્યો છે… 0%');
     } else if (m.type === 'file-chunk' && incomingFile && m.id === incomingFile.id) {
       incomingFile.chunks[m.index] = m.data;
@@ -125,27 +183,20 @@
       var pct = incomingFile.total ? Math.round((incomingFile.received / incomingFile.total) * 100) : 0;
       setPill('વિડિયો આવી રહ્યો છે… ' + pct + '%');
     } else if (m.type === 'file-end' && incomingFile && m.id === incomingFile.id) {
-      if (incomingFile.received !== incomingFile.total) {
-        setPill('વિડિયો પૂરો મળ્યો નથી — ફરી મોકલો', false);
-        incomingFile = null;
-        return;
-      }
-      var completed = incomingFile;
-      incomingFile = null;
+      if (incomingFile.received !== incomingFile.total) { setPill('વિડિયો પૂરો મળ્યો નથી — ફરી મોકલો', false); incomingFile = null; return; }
+      var completed = incomingFile; incomingFile = null;
       try {
         var blob = new Blob(completed.chunks, { type:completed.mime });
         if (localObjectUrl) URL.revokeObjectURL(localObjectUrl);
         localObjectUrl = URL.createObjectURL(blob);
-        loadVideo(localObjectUrl, completed.name, true, true);
-        setPill('વિડિયો તૈયાર છે ✓', true);
+        loadBlobVideo(localObjectUrl, completed.name);
+        setPill('કંટ્રોલર જોડાયેલ છે ✓', true);
         report('file-ready', { name:completed.name });
-      } catch(e) {
-        setPill('વિડિયો તૈયાર કરવામાં ભૂલ આવી', false);
-      }
+      } catch(e) { setPill('વિડિયો તૈયાર કરવામાં ભૂલ આવી', false); }
     }
   }
 
-  // ---- PeerJS (player is the host that others connect to) ----
+  // ---- PeerJS (player hosts the room) ----
   var PEER_PREFIX = 'rvideo-';
   function connect(){
     if (!window.Peer) { setPill('PeerJS લોડ ન થયું — ઇન્ટરનેટ ચેક કરો', false); return; }
@@ -157,54 +208,48 @@
         if (localObjectUrl) { URL.revokeObjectURL(localObjectUrl); localObjectUrl = ''; }
         v.removeAttribute('src');
         v.srcObject = stream;
-        titleTxt.textContent = (call.metadata && call.metadata.name) || 'લાઇવ વિડિયો';
-        setPill('● લાઇવ સ્ટ્રીમ જોડાયેલ છે', true);
-        if (startOverlay.style.display === 'none') {
-          var p = v.play(); if (p && p.catch) p.catch(function(){});
-        } else {
-          playOnReady = true;
-        }
+        streamDuration = (call.metadata && call.metadata.duration) || 0;
+        haveVideo((call.metadata && call.metadata.name) || 'લાઇવ વિડિયો');
+        setPill('● લાઇવ', true);
+        tryPlay();
       });
-      call.on('close', function(){ setPill('લાઇવ સ્ટ્રીમ બંધ થયું', false); });
-      call.on('error', function(){ setPill('લાઇવ સ્ટ્રીમમાં ભૂલ આવી', false); });
+      call.on('close', function(){ setPill('સ્ટ્રીમ બંધ થયું'); });
+      call.on('error', function(){ setPill('સ્ટ્રીમમાં ભૂલ આવી', false); });
     });
     peer.on('connection', function(connection){
       conn = connection;
-      conn.on('open', function(){
-        setPill('કંટ્રોલર જોડાયેલ છે ✓');
-        playOnReady = false;
-      });
+      conn.on('open', function(){ setPill('કંટ્રોલર જોડાયેલ છે ✓', true); });
       conn.on('data', handleMsg);
-      conn.on('close', function(){ setPill('કંટ્રોલર છૂટું પડ્યું'); conn = null; });
+      conn.on('close', function(){ setPill('કંટ્રોલર છૂટું પડ્યું', false); conn = null; });
     });
     peer.on('error', function(err){
       var t = 'કનેક્શન ભૂલ';
       if (err && err.type === 'unavailable-id') t = 'આ કોડ પહેલેથી વપરાયો છે — બીજો કોડ વાપરો';
-      else if (err && err.type === 'peer-unavailable') t = 'કંટ્રોલર હજુ મળ્યું નથી';
       setPill(t, false);
     });
     peer.on('disconnected', function(){ if (!peer.destroyed) peer.reconnect(); });
   }
 
   startBtn.addEventListener('click', function(){
+    started = true;
     startOverlay.style.display = 'none';
     goFullscreen();
-    if (v.src) { var p = v.play(); if (p && p.catch) p.catch(function(){}); }
-    if (playOnReady) { var p2 = v.play(); if (p2 && p2.catch) p2.catch(function(){}); playOnReady = false; }
+    keepAwake();
+    showUI();
+    if (playOnReady || v.src || v.srcObject) { var p = v.play(); if (p && p.catch) p.catch(function(){}); playOnReady = false; }
   });
 
-  v.addEventListener('play', function(){ report('status'); });
-  v.addEventListener('pause', function(){ report('status'); });
-  v.addEventListener('loadedmetadata', function(){ report('status'); });
-  v.addEventListener('ended', function(){ report('ended'); });
+  v.addEventListener('play', function(){ report('status'); showUI(); });
+  v.addEventListener('pause', function(){ report('status'); showUI(); });
+  v.addEventListener('loadedmetadata', function(){ updateBar(); report('status'); });
+  v.addEventListener('ended', function(){ report('ended'); showUI(); });
   v.addEventListener('timeupdate', function(){
+    updateBar();
     var now = Date.now();
     if (now - lastReport > 1000) { lastReport = now; report('status'); }
   });
-  v.addEventListener('click', function(){
-    var tb = document.getElementById('titleBar');
-    tb.style.display = (tb.style.display === 'none') ? '' : 'none';
-  });
+  // tap on screen: show controls; double-tap-less simple behaviour
+  document.getElementById('stage').addEventListener('click', function(){ showUI(); });
 
   if (!room) { setPill('રૂમ કોડ ખૂટે છે', false); }
   else connect();
