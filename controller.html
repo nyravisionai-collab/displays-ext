@@ -2,8 +2,14 @@
 <html lang="gu">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f2027">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>કંટ્રોલર</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; }
@@ -40,6 +46,8 @@
   .hint { font-size:12px; opacity:.6; margin-top:10px; line-height:1.5; }
   #uploadStatus { display:none; margin-top:12px; font-size:12px; line-height:1.5; color:#bfffe9; text-align:left; }
   #uploadProgress { width:100%; height:8px; margin-top:6px; accent-color:#22d3a0; }
+  #installBtn { display:none; width:100%; padding:12px; margin-top:10px; border:1px solid rgba(255,255,255,.35); border-radius:12px;
+    background:rgba(255,255,255,.12); color:#fff; font-size:13px; font-weight:700; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -48,13 +56,14 @@
     <h1>🎮 કંટ્રોલર</h1>
     <div class="room" id="roomTag">—</div>
     <div id="pill">કનેક્ટ થઈ રહ્યું છે…</div>
+    <button id="installBtn" data-rvc-install>📲 એપ તરીકે ઇન્સ્ટોલ કરો</button>
   </header>
 
   <!-- Step 1: pick video from gallery -->
   <div class="card pick" id="pickCard">
     <input id="file" type="file" accept="video/*">
     <label class="filePick" for="file" id="pickLabel">📁 ગેલેરીમાંથી વિડિયો પસંદ કરો</label>
-    <div class="hint">પસંદ કરેલો વિડિયો સીધો જૂના ફોન (પ્લેયર) પર ચાલશે.<br>વિડિયો ચાલે ત્યાં સુધી આ પેજ ખુલ્લું રાખો.</div>
+    <div class="hint">પસંદ કરેલો વિડિયો સીધો જૂના ફોન (પ્લેયર) પર ચાલશે.<br>"✓ સેવ થઈ ગયો" દેખાય પછી આ પેજ બંધ કરીને પણ વિડિયો ચાલુ રહેશે.</div>
     <div id="uploadStatus">
       <span id="uploadText">—</span>
       <progress id="uploadProgress" max="100" value="0"></progress>
@@ -84,6 +93,7 @@
   </div>
 </div>
 
+<script src="pwa.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 (function () {
@@ -92,6 +102,7 @@
   var room = (params.get('room') || '').trim();
   var PEER_PREFIX = 'rvideo-';
   document.getElementById('roomTag').textContent = 'રૂમ: ' + room;
+  if (window.rvcSaveSession && room) rvcSaveSession(room, 'controller');
 
   var peer = null, conn = null, connected = false;
   var mediaCall = null, streamSourceUrl = '', streamingMode = false, hasVideo = false;
@@ -178,6 +189,37 @@
       check();
     });
   }
+  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+  // સંપૂર્ણ ફાઇલ chunks માં મોકલો. લાઇવ સ્ટ્રીમ સાથે સાથે ચાલે (background ટ્રાન્સફર),
+  // પૂરો થાય એટલે પ્લેયર પાસે વિડિયો સેવ થઈ જાય → પછી આ પેજ બંધ કરી શકાય.
+  async function sendFileInBackground(file){
+    var transferId = Date.now() + '-' + Math.random().toString(36).slice(2);
+    var totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    try {
+      send({ type:'file-start', id:transferId, name:file.name, mime:file.type || 'video/mp4', size:file.size, total:totalChunks });
+      for (var i = 0; i < totalChunks; i++) {
+        var ready = await waitForBuffer();
+        if (!ready) throw new Error('connection closed');
+        var data = await file.slice(i * CHUNK_SIZE, Math.min(file.size, (i + 1) * CHUNK_SIZE)).arrayBuffer();
+        conn.send({ type:'file-chunk', id:transferId, index:i, data:data });
+        var pct = Math.round(((i + 1) / totalChunks) * 100);
+        progress.value = pct;
+        if (pct % 5 === 0 || i + 1 === totalChunks) {
+          text.textContent = streamingMode
+            ? '● લાઇવ ચાલે છે · પ્લેયર પર સેવ થઈ રહ્યો છે… ' + pct + '%'
+            : 'વિડિયો મોકલાઈ રહ્યો છે… ' + pct + '%';
+        }
+        if (streamingMode) await sleep(15);   // લાઇવ સ્ટ્રીમ ને બગાડે નહીં એ માટે હળવો વિરામ
+      }
+      send({ type:'file-end', id:transferId });
+      text.textContent = streamingMode ? '● લાઇવ ચાલે છે · સેવ થઈ રહ્યો છે… 100%' : 'વિડિયો મોકલાઈ ગયો — પ્લેયરમાં તૈયાર થઈ રહ્યો છે…';
+    } catch(err) {
+      text.textContent = 'વિડિયો મોકલવામાં ભૂલ આવી. ફરી પ્રયત્ન કરો.';
+    } finally {
+      uploading = false;
+    }
+  }
 
   // ---- gallery pick ----
   document.getElementById('file').addEventListener('change', async function(e){
@@ -217,11 +259,15 @@
         mediaCall = peer.call(PEER_PREFIX + room, mediaStream, { metadata:{ name:file.name, duration:streamSource.duration || 0 } });
         streamingMode = true; hasVideo = true;
         setTime(0, streamSource.duration || 0);
-        progress.value = 100;
-        text.textContent = '● લાઇવ ચાલી રહ્યું છે — આ પેજ ખુલ્લું રાખો';
+        progress.removeAttribute('value');
+        text.textContent = '● લાઇવ ચાલે છે · પ્લેયર પર સેવ થઈ રહ્યો છે…';
         pickLabel.textContent = '📁 બીજો વિડિયો પસંદ કરો';
         mediaCall.on('close', function(){ if (streamingMode) { text.textContent = 'સ્ટ્રીમ બંધ થયું'; } });
         e.target.value = '';
+        // લાઇવ સ્ટ્રીમ સાથે સાથે સંપૂર્ણ ફાઇલ પણ background માં મોકલો —
+        // પ્લેયર પાસે સેવ થઈ જાય પછી આ પેજ બંધ કરીએ તો પણ વિડિયો ચાલુ રહે.
+        uploading = true;
+        sendFileInBackground(file);
         return;
       } catch(err) {
         stopStreaming();
@@ -230,30 +276,11 @@
       }
     }
 
-    // Fallback: send file in chunks.
+    // Fallback: આખી ફાઇલ chunks માં મોકલો.
     uploading = true;
     progress.value = 0;
-    var transferId = Date.now() + '-' + Math.random().toString(36).slice(2);
-    var totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    try {
-      send({ type:'file-start', id:transferId, name:file.name, mime:file.type || 'video/mp4', size:file.size, total:totalChunks });
-      for (var i = 0; i < totalChunks; i++) {
-        var ready = await waitForBuffer();
-        if (!ready) throw new Error('connection closed');
-        var data = await file.slice(i * CHUNK_SIZE, Math.min(file.size, (i + 1) * CHUNK_SIZE)).arrayBuffer();
-        conn.send({ type:'file-chunk', id:transferId, index:i, data:data });
-        var pct = Math.round(((i + 1) / totalChunks) * 100);
-        progress.value = pct;
-        text.textContent = 'વિડિયો મોકલાઈ રહ્યો છે… ' + pct + '%';
-      }
-      send({ type:'file-end', id:transferId });
-      text.textContent = 'વિડિયો મોકલાઈ ગયો — પ્લેયરમાં તૈયાર થઈ રહ્યો છે…';
-    } catch(err) {
-      text.textContent = 'વિડિયો મોકલવામાં ભૂલ આવી. ફરી પ્રયત્ન કરો.';
-    } finally {
-      uploading = false;
-      e.target.value = '';
-    }
+    await sendFileInBackground(file);
+    e.target.value = '';
   });
 
   // local stream source → UI
@@ -292,7 +319,13 @@
     } else if (m.type === 'file-ready') {
       hasVideo = true;
       progress.value = 100;
-      text.textContent = '✓ વિડિયો પ્લેયરમાં ચાલી રહ્યો છે';
+      if (streamingMode) {
+        // સંપૂર્ણ વિડિયો પ્લેયર પર સેવ થઈ ગયો → લાઇવ સ્ટ્રીમ બંધ કરો, હવેથી પ્લેયર પોતાની પાસે રાખેલો વિડિયો ચલાવે.
+        stopStreaming();
+        text.textContent = '✓ વિડિયો પ્લેયર પર સેવ થઈ ગયો — આ પેજ બંધ કરીને પણ વિડિયો ચાલુ રહેશે';
+      } else {
+        text.textContent = '✓ વિડિયો પ્લેયરમાં ચાલી રહ્યો છે';
+      }
       pickLabel.textContent = '📁 બીજો વિડિયો પસંદ કરો';
       npTitle.textContent = m.name || 'ફોનનો વિડિયો';
     } else if (m.type === 'ended') {

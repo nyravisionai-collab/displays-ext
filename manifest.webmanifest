@@ -1,0 +1,31 @@
+{
+  "name": "રિમોટ વિડિયો કંટ્રોલ",
+  "short_name": "રિમોટ વિડિયો",
+  "description": "એક ફોન (કંટ્રોલર) થી બીજા ફોન (પ્લેયર) માં વિડિયો ચલાવો અને કંટ્રોલ કરો. ઇન્સ્ટોલ કરીને એપ તરીકે વાપરો.",
+  "lang": "gu",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f2027",
+  "theme_color": "#0f2027",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "કંટ્રોલર ખોલો",
+      "short_name": "કંટ્રોલર",
+      "url": "./controller.html",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "પ્લેયર ખોલો",
+      "short_name": "પ્લેયર",
+      "url": "./player.html",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}
